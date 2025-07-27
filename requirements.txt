@@ -1,0 +1,11 @@
+streamlit==1.32.2
+moviepy==1.0.3
+opencv-python==4.9.0.80
+numpy<2.0.0
+Pillow==10.3.0
+pydub==0.25.1
+speechrecognition==3.10.4
+pyannote.audio==3.1.1
+torch>=2.0.0
+torchaudio>=2.0.0
+yt-dlp>=2024.1.0
