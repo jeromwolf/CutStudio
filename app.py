@@ -318,12 +318,22 @@ if video_loaded and temp_file_path:
         with col3:
             detection_method = st.selectbox(
                 "감지 방법",
-                ["자동 (MFCC + 클러스터링)", "고급 (향상된 특징 + 스펙트럴)", "간단 (에너지 기반)"],
-                help="고급: 가장 정확함 (피치, 포먼트, LPC 분석), 자동: 균형잡힌 성능, 간단: 빠르지만 덜 정확함"
+                ["실용적 (권장)", "고급 (향상된 특징 + 스펙트럴)", "자동 (MFCC + 클러스터링)", "간단 (에너지 기반)"],
+                help="실용적: 속도와 정확도의 균형 (1-2분), 고급: 높은 정확도 (5-10분), 자동: 기본 성능, 간단: 빠르지만 덜 정확함"
             )
         
         if st.button("화자 구간 감지", type="primary", key="detect_speakers"):
-            if detection_method.startswith("고급"):
+            if detection_method.startswith("실용적"):
+                st.success("✅ 실용적 감지는 속도와 정확도의 균형을 제공합니다 (1-2분)")
+                st.info("""
+                ⚡ **실용적 감지 진행 단계:**
+                1. 오디오 추출
+                2. 빠른 음성 구간 검출 (Silero VAD)
+                3. 핵심 특징만 추출 (MFCC 13개, 기본 피치, 스펙트럴)
+                4. 적응형 K-means 클러스터링
+                5. 빠른 후처리
+                """)
+            elif detection_method.startswith("고급"):
                 st.warning("⚠️ 고급 감지는 정확하지만 시간이 오래 걸립니다 (1-3분)")
                 st.info("""
                 🔍 **진행 단계:**
@@ -337,6 +347,8 @@ if video_loaded and temp_file_path:
             with st.spinner(f"화자 구간을 감지하는 중... ({detection_method})"):
                 use_simple = detection_method.startswith("간단")
                 use_advanced = detection_method.startswith("고급")
+                use_enhanced = detection_method.startswith("향상된")
+                use_practical = detection_method.startswith("실용적")
                 
                 # 감지 시작
                 start_time = time.time()
@@ -345,7 +357,9 @@ if video_loaded and temp_file_path:
                     min_duration, 
                     num_speakers=num_speakers,
                     use_simple=use_simple,
-                    use_advanced=use_advanced
+                    use_advanced=use_advanced,
+                    use_enhanced=use_enhanced,
+                    use_practical=use_practical
                 )
                 
                 # 소요 시간 표시
