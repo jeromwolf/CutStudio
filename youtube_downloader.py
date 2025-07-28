@@ -21,6 +21,8 @@ class YouTubeDownloader:
             ydl_opts = {
                 'quiet': True,
                 'no_warnings': True,
+                'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
             }
             
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -95,6 +97,8 @@ class YouTubeDownloader:
                 'progress_hooks': [progress_hook],
                 'quiet': True,
                 'no_warnings': True,
+                'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'extractor_args': {'youtube': {'player_client': ['android', 'web']}},  # 안드로이드 클라이언트 사용
             }
             
             # 특정 형식이 지정된 경우
@@ -151,6 +155,8 @@ class YouTubeDownloader:
                 }],
                 'quiet': True,
                 'no_warnings': True,
+                'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'extractor_args': {'youtube': {'player_client': ['android', 'web']}},  # 안드로이드 클라이언트 사용
             }
             
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:

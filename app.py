@@ -3,6 +3,7 @@ import tempfile
 import os
 from pathlib import Path
 import shutil
+import time
 from video_editor import VideoEditor
 from utils import get_video_info, format_time
 from youtube_downloader import YouTubeDownloader
@@ -59,7 +60,7 @@ with youtube_tab:
             
             with col1:
                 if info['thumbnail']:
-                    st.image(info['thumbnail'], use_column_width=True)
+                    st.image(info['thumbnail'])
             
             with col2:
                 st.write(f"**제목:** {info['title']}")
@@ -291,7 +292,7 @@ if video_loaded and temp_file_path:
         st.write("**화자별 구간 감지 및 자르기**")
         st.info("동영상에서 화자를 구분하여 각 화자의 발화 구간을 자동으로 감지합니다.")
         
-        col1, col2 = st.columns([3, 1])
+        col1, col2, col3 = st.columns([2, 2, 2])
         with col1:
             min_duration = st.slider(
                 "최소 발화 시간 (초)",
@@ -302,9 +303,53 @@ if video_loaded and temp_file_path:
                 help="이 시간보다 짧은 발화는 무시됩니다"
             )
         
+        with col2:
+            speaker_option = st.selectbox(
+                "화자 수 설정",
+                ["자동 감지", "2명", "3명", "4명", "5명", "6명"],
+                help="자동 감지를 선택하면 AI가 화자 수를 추정합니다"
+            )
+            
+            if speaker_option == "자동 감지":
+                num_speakers = None
+            else:
+                num_speakers = int(speaker_option[0])
+        
+        with col3:
+            detection_method = st.selectbox(
+                "감지 방법",
+                ["자동 (MFCC + 클러스터링)", "고급 (향상된 특징 + 스펙트럴)", "간단 (에너지 기반)"],
+                help="고급: 가장 정확함 (피치, 포먼트, LPC 분석), 자동: 균형잡힌 성능, 간단: 빠르지만 덜 정확함"
+            )
+        
         if st.button("화자 구간 감지", type="primary", key="detect_speakers"):
-            with st.spinner("화자 구간을 감지하는 중... (시간이 걸릴 수 있습니다)"):
-                segments = st.session_state.video_editor.detect_speakers(min_duration)
+            if detection_method.startswith("고급"):
+                st.warning("⚠️ 고급 감지는 정확하지만 시간이 오래 걸립니다 (1-3분)")
+                st.info("""
+                🔍 **진행 단계:**
+                1. 오디오 추출
+                2. 음성 구간 검출 (Silero VAD)
+                3. 각 구간에서 특징 추출 (MFCC, 피치, 포먼트 등)
+                4. 화자 클러스터링
+                5. 후처리 및 병합
+                """)
+            
+            with st.spinner(f"화자 구간을 감지하는 중... ({detection_method})"):
+                use_simple = detection_method.startswith("간단")
+                use_advanced = detection_method.startswith("고급")
+                
+                # 감지 시작
+                start_time = time.time()
+                
+                segments = st.session_state.video_editor.detect_speakers(
+                    min_duration, 
+                    num_speakers=num_speakers,
+                    use_simple=use_simple,
+                    use_advanced=use_advanced
+                )
+                
+                # 소요 시간 표시
+                elapsed_time = time.time() - start_time
                 
                 if segments:
                     st.session_state.speaker_segments = segments
@@ -330,7 +375,9 @@ if video_loaded and temp_file_path:
             st.markdown("---")
             st.write("**화자별 구간 정보:**")
             
-            # 구간 정보를 표로 표시
+            # 구간 정보를 표로 표시 (편집 가능)
+            st.write("**💡 팁:** 화자 열을 클릭하여 수정할 수 있습니다.")
+            
             segment_data = []
             for i, seg in enumerate(st.session_state.speaker_segments):
                 segment_data.append({
@@ -338,10 +385,37 @@ if video_loaded and temp_file_path:
                     '화자': seg['speaker'],
                     '시작': format_time(seg['start']),
                     '종료': format_time(seg['end']),
-                    '길이': format_time(seg['duration'])
+                    '길이': format_time(seg['duration']),
+                    '신뢰도': f"{seg.get('confidence', 0.8):.1%}" if 'confidence' in seg else "N/A"
                 })
             
-            st.dataframe(segment_data, use_container_width=True)
+            # 편집 가능한 데이터프레임
+            edited_df = st.data_editor(
+                segment_data, 
+                column_config={
+                    "번호": st.column_config.NumberColumn("번호", disabled=True),
+                    "화자": st.column_config.SelectboxColumn(
+                        "화자",
+                        help="클릭하여 화자를 변경할 수 있습니다",
+                        options=[f"SPEAKER_{i}" for i in range(6)],
+                        required=True,
+                    ),
+                    "시작": st.column_config.TextColumn("시작", disabled=True),
+                    "종료": st.column_config.TextColumn("종료", disabled=True),
+                    "길이": st.column_config.TextColumn("길이", disabled=True),
+                    "신뢰도": st.column_config.TextColumn("신뢰도", disabled=True)
+                },
+                use_container_width=True,
+                hide_index=True,
+                key="speaker_segments_editor"
+            )
+            
+            # 변경사항 적용 버튼
+            if st.button("변경사항 적용", type="secondary"):
+                # 편집된 데이터로 session_state 업데이트
+                for i, row in edited_df.iterrows():
+                    st.session_state.speaker_segments[i]['speaker'] = row['화자']
+                st.success("화자 정보가 업데이트되었습니다!")
             
             st.markdown("---")
             st.write("**화자별 동영상 자르기 옵션:**")
