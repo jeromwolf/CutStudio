@@ -39,6 +39,14 @@ except ImportError:
     PRACTICAL_DETECTOR_AVAILABLE = False
     PracticalSpeakerDetector = None
 
+# 허깅페이스 기반 화자 감지 옵션
+try:
+    from huggingface_speaker_detector import HuggingFaceSpeakerDetector
+    HUGGINGFACE_DETECTOR_AVAILABLE = True
+except ImportError:
+    HUGGINGFACE_DETECTOR_AVAILABLE = False
+    HuggingFaceSpeakerDetector = None
+
 class VideoEditor:
     def __init__(self):
         self.video_clip = None
@@ -49,6 +57,7 @@ class VideoEditor:
         self.advanced_detector = ImprovedSpeakerDetector() if ADVANCED_DETECTOR_AVAILABLE else None
         self.enhanced_detector = EnhancedSpeakerDetector() if ENHANCED_DETECTOR_AVAILABLE else None
         self.practical_detector = PracticalSpeakerDetector() if PRACTICAL_DETECTOR_AVAILABLE else None
+        self.huggingface_detector = HuggingFaceSpeakerDetector() if HUGGINGFACE_DETECTOR_AVAILABLE else None
         self.video_path = None
     
     def load_video(self, video_path):
@@ -182,10 +191,18 @@ class VideoEditor:
             print(f"속도 변경 실패: {e}")
             return None
     
-    def detect_speakers(self, min_duration=2.0, num_speakers=2, use_simple=False, use_advanced=False, use_enhanced=False, use_practical=False):
+    def detect_speakers(self, min_duration=2.0, num_speakers=2, use_simple=False, use_advanced=False, use_enhanced=False, use_practical=False, use_huggingface=False):
         """화자 구간 감지"""
         if self.video_path is None:
             return None
+        
+        # 허깅페이스 감지기 사용 (최신 AI 모델)
+        if use_huggingface and self.huggingface_detector:
+            return self.huggingface_detector.detect_speakers(
+                self.video_path,
+                min_duration,
+                num_speakers=num_speakers
+            )
         
         # 실용적인 감지기 사용 (균형잡힌 성능)
         if use_practical and self.practical_detector:

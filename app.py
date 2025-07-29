@@ -8,6 +8,10 @@ from video_editor import VideoEditor
 from utils import get_video_info, format_time
 from youtube_downloader import YouTubeDownloader
 
+# .env 파일 로드
+from dotenv import load_dotenv
+load_dotenv()
+
 st.set_page_config(
     page_title="CutStudio - 동영상 편집기",
     page_icon="🎬",
@@ -318,12 +322,35 @@ if video_loaded and temp_file_path:
         with col3:
             detection_method = st.selectbox(
                 "감지 방법",
-                ["실용적 (권장)", "고급 (향상된 특징 + 스펙트럴)", "자동 (MFCC + 클러스터링)", "간단 (에너지 기반)"],
-                help="실용적: 속도와 정확도의 균형 (1-2분), 고급: 높은 정확도 (5-10분), 자동: 기본 성능, 간단: 빠르지만 덜 정확함"
+                ["허깅페이스 AI (최신)", "실용적 (권장)", "고급 (향상된 특징 + 스펙트럴)", "자동 (MFCC + 클러스터링)", "간단 (에너지 기반)"],
+                help="허깅페이스: 최신 AI 모델 사용 (정확도 최고), 실용적: 속도와 정확도의 균형 (1-2분), 고급: 높은 정확도 (5-10분), 자동: 기본 성능, 간단: 빠르지만 덜 정확함"
             )
         
         if st.button("화자 구간 감지", type="primary", key="detect_speakers"):
-            if detection_method.startswith("실용적"):
+            if detection_method.startswith("허깅페이스"):
+                st.success("🤗 허깅페이스 AI 모델을 사용합니다 (pyannote/speaker-diarization-3.1)")
+                st.info("""
+                🚀 **허깅페이스 AI 감지 진행 단계:**
+                1. 오디오 추출
+                2. Pyannote 3.1 모델로 화자 분리
+                3. 자동 화자 수 감지 및 세그먼트 추출
+                4. 높은 정확도의 화자 구분
+                
+                **참고:** 처음 실행 시 모델 다운로드로 시간이 걸릴 수 있습니다.
+                """)
+                
+                # 허깅페이스 토큰 확인
+                if not os.getenv("HUGGINGFACE_TOKEN"):
+                    st.error("⚠️ 허깅페이스 토큰이 필요합니다!")
+                    st.markdown("""
+                    **토큰 설정 방법:**
+                    1. https://huggingface.co/settings/tokens 에서 토큰 생성
+                    2. 환경변수 설정: `export HUGGINGFACE_TOKEN=your_token_here`
+                    3. 또는 `.env` 파일에 추가: `HUGGINGFACE_TOKEN=your_token_here`
+                    """)
+                    st.stop()
+                    
+            elif detection_method.startswith("실용적"):
                 st.success("✅ 실용적 감지는 속도와 정확도의 균형을 제공합니다 (1-2분)")
                 st.info("""
                 ⚡ **실용적 감지 진행 단계:**
@@ -344,14 +371,49 @@ if video_loaded and temp_file_path:
                 5. 후처리 및 병합
                 """)
             
-            with st.spinner(f"화자 구간을 감지하는 중... ({detection_method})"):
+            # 진행 상황 표시를 위한 컨테이너
+            progress_container = st.empty()
+            
+            with progress_container.container():
+                st.info(f"🎯 화자 구간을 감지하는 중... ({detection_method})")
+                
+                # 동영상 길이 확인
+                video_info = get_video_info(st.session_state.video_editor.video_path)
+                if video_info and 'duration' in video_info:
+                    duration = video_info['duration']
+                    st.write(f"📹 동영상 길이: {format_time(duration)}")
+                    
+                    if detection_method.startswith("허깅페이스"):
+                        estimated_time = duration * 0.3
+                        st.warning(f"⏱️ 예상 처리 시간: {int(estimated_time)}초 ~ {int(estimated_time*2)}초")
+                        st.info("💡 팁: 처음 실행 시 모델 다운로드로 추가 시간이 걸릴 수 있습니다 (약 1-2GB)")
+                        
+                        # 대안 제시
+                        with st.expander("🚀 더 빠른 대안"):
+                            st.write("""
+                            **시간이 너무 오래 걸린다면:**
+                            1. **"실용적 (권장)"** 방법을 사용해보세요 - 1-2분 내 처리
+                            2. **"간단 (에너지 기반)"** 방법은 가장 빠르지만 정확도가 낮습니다
+                            3. 긴 동영상은 먼저 잘라서 처리하는 것을 권장합니다
+                            """)
+                
                 use_simple = detection_method.startswith("간단")
                 use_advanced = detection_method.startswith("고급")
                 use_enhanced = detection_method.startswith("향상된")
                 use_practical = detection_method.startswith("실용적")
+                use_huggingface = detection_method.startswith("허깅페이스")
                 
                 # 감지 시작
                 start_time = time.time()
+                
+                # 진행률 표시
+                if detection_method.startswith("허깅페이스"):
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
+                    
+                    # 주기적으로 진행 상황 업데이트 (실제로는 추정치)
+                    status_text.text("모델 초기화 중...")
+                    progress_bar.progress(10)
                 
                 segments = st.session_state.video_editor.detect_speakers(
                     min_duration, 
@@ -359,7 +421,8 @@ if video_loaded and temp_file_path:
                     use_simple=use_simple,
                     use_advanced=use_advanced,
                     use_enhanced=use_enhanced,
-                    use_practical=use_practical
+                    use_practical=use_practical,
+                    use_huggingface=use_huggingface
                 )
                 
                 # 소요 시간 표시
