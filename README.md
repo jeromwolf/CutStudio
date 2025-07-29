@@ -435,23 +435,23 @@ sudo chown -R $USER:$USER ./processed/
 ## 🎬 스크린샷 및 데모
 
 ### 1. 메인 인터페이스
-![메인 인터페이스](screenshots/main_interface.png)
+![메인 인터페이스](screenshots/main_interface.png?v=3.1)
 *동영상 업로드 및 YouTube 다운로드 인터페이스*
 
 ### 2. 화자 분리 설정
-![화자 분리 설정](screenshots/speaker_detection_setup.png)
+![화자 분리 설정](screenshots/speaker_detection_setup.png?v=3.1)
 *5가지 화자 감지 방법 선택 및 설정*
 
 ### 3. AI 분석 결과 - 타임라인 뷰
-![타임라인 뷰](screenshots/timeline_view.png)
-*화자별 썸네일과 시간 순서 표시*
+![타임라인 뷰](screenshots/timeline_view.png?v=3.1)
+*화자별 썸네일과 시간 순서 표시 (✅ 완료 상태 표시 포함)*
 
 ### 4. 음성 인식 및 AI 요약
-![AI 요약 결과](screenshots/ai_summary.png)
-*Whisper 음성 인식과 Gemini AI 요약 결과*
+![AI 요약 결과](screenshots/ai_summary.png?v=3.1)
+*Whisper 음성 인식과 듀얼 AI 요약 결과 (Gemini + Claude)*
 
 ### 5. 화자별 분석 상세
-![화자별 분석](screenshots/speaker_analysis.png)
+![화자별 분석](screenshots/speaker_analysis.png?v=3.1)
 *각 화자의 발언 내용과 AI 생성 요약*
 
 > **참고**: 스크린샷은 실제 사용 화면을 기반으로 제작되었으며, 개인정보 보호를 위해 일부 내용은 샘플 데이터로 대체되었습니다.
