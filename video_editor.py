@@ -1,4 +1,9 @@
 from moviepy.editor import VideoFileClip, concatenate_videoclips, vfx
+import cv2
+import numpy as np
+from PIL import Image
+import base64
+import io
 from moviepy.config import change_settings
 from pathlib import Path
 import tempfile
@@ -191,13 +196,19 @@ class VideoEditor:
             print(f"속도 변경 실패: {e}")
             return None
     
-    def detect_speakers(self, min_duration=2.0, num_speakers=2, use_simple=False, use_advanced=False, use_enhanced=False, use_practical=False, use_huggingface=False):
+    def detect_speakers(self, min_duration=2.0, num_speakers=2, use_simple=False, use_advanced=False, use_enhanced=False, use_practical=False, use_huggingface=False, progress_callback=None):
         """화자 구간 감지"""
         if self.video_path is None:
             return None
         
+        # 진행 상황 콜백 호출
+        if progress_callback:
+            progress_callback("초기화 중...", 5)
+        
         # 허깅페이스 감지기 사용 (최신 AI 모델)
         if use_huggingface and self.huggingface_detector:
+            if progress_callback:
+                progress_callback("허깅페이스 AI 모델 실행 중...", 20)
             return self.huggingface_detector.detect_speakers(
                 self.video_path,
                 min_duration,
@@ -206,6 +217,8 @@ class VideoEditor:
         
         # 실용적인 감지기 사용 (균형잡힌 성능)
         if use_practical and self.practical_detector:
+            if progress_callback:
+                progress_callback("실용적 감지기 실행 중...", 20)
             return self.practical_detector.detect_speakers(
                 self.video_path,
                 min_duration,
@@ -214,6 +227,8 @@ class VideoEditor:
         
         # 향상된 감지기 사용 (최고 성능)
         if use_enhanced and self.enhanced_detector:
+            if progress_callback:
+                progress_callback("향상된 감지기 실행 중...", 20)
             return self.enhanced_detector.detect_speakers(
                 self.video_path,
                 min_duration,
@@ -222,6 +237,8 @@ class VideoEditor:
         
         # 고급 감지기 사용
         if use_advanced and self.advanced_detector:
+            if progress_callback:
+                progress_callback("고급 감지기 실행 중...", 20)
             return self.advanced_detector.detect_speakers(
                 self.video_path,
                 min_duration,
@@ -229,6 +246,8 @@ class VideoEditor:
             )
         
         # 기본 감지기 사용
+        if progress_callback:
+            progress_callback("기본 감지기 실행 중...", 20)
         return self.speaker_detector.detect_speakers(
             self.video_path, 
             min_duration, 
@@ -398,9 +417,19 @@ class VideoEditor:
             
             # 각 구간의 클립 생성
             clips = []
+            video_duration = self.video_clip.duration
             for segment in speaker_segments:
                 try:
-                    clip = self.video_clip.subclip(segment['start'], segment['end'])
+                    # 시간이 동영상 길이를 초과하지 않도록 보정
+                    start_time = min(segment['start'], video_duration)
+                    end_time = min(segment['end'], video_duration)
+                    
+                    # 시작 시간이 끝 시간보다 크거나 같으면 스킵
+                    if start_time >= end_time:
+                        print(f"잘못된 시간 구간 스킵: {segment['start']}-{segment['end']}")
+                        continue
+                    
+                    clip = self.video_clip.subclip(start_time, end_time)
                     clips.append(clip)
                 except Exception as e:
                     print(f"구간 추출 실패 ({segment['start']}-{segment['end']}): {e}")
@@ -443,6 +472,149 @@ class VideoEditor:
             traceback.print_exc()
             return None
     
+    def generate_speaker_thumbnails(self, speaker_segments, thumbnail_size=(150, 100)):
+        """화자별 썸네일 생성"""
+        if self.video_clip is None or not speaker_segments:
+            return {}
+        
+        thumbnails = {}
+        
+        try:
+            for segment in speaker_segments:
+                speaker_id = segment['speaker']
+                
+                # 이미 해당 화자의 썸네일이 있으면 건너뛰기
+                if speaker_id in thumbnails:
+                    continue
+                
+                # 세그먼트 중간 지점에서 프레임 추출
+                mid_time = (segment['start'] + segment['end']) / 2
+                
+                try:
+                    # MoviePy로 프레임 추출
+                    frame = self.video_clip.get_frame(mid_time)
+                    
+                    # numpy 배열을 PIL Image로 변환
+                    pil_image = Image.fromarray(frame)
+                    
+                    # 썸네일 크기로 리사이즈
+                    pil_image.thumbnail(thumbnail_size, Image.Resampling.LANCZOS)
+                    
+                    # Base64로 인코딩하여 웹에서 사용할 수 있도록 변환
+                    buffer = io.BytesIO()
+                    pil_image.save(buffer, format='JPEG', quality=85)
+                    img_str = base64.b64encode(buffer.getvalue()).decode()
+                    
+                    thumbnails[speaker_id] = {
+                        'image_base64': img_str,
+                        'timestamp': mid_time,
+                        'speaker': speaker_id,
+                        'width': pil_image.width,
+                        'height': pil_image.height
+                    }
+                    
+                except Exception as e:
+                    print(f"화자 {speaker_id} 썸네일 생성 실패: {e}")
+                    # 기본 썸네일 생성 (검은 이미지)
+                    default_img = Image.new('RGB', thumbnail_size, color='black')
+                    buffer = io.BytesIO()
+                    default_img.save(buffer, format='JPEG')
+                    img_str = base64.b64encode(buffer.getvalue()).decode()
+                    
+                    thumbnails[speaker_id] = {
+                        'image_base64': img_str,
+                        'timestamp': mid_time,
+                        'speaker': speaker_id,
+                        'width': thumbnail_size[0],
+                        'height': thumbnail_size[1],
+                        'is_default': True
+                    }
+            
+            return thumbnails
+            
+        except Exception as e:
+            print(f"썸네일 생성 전체 실패: {e}")
+            return {}
+    
+    def generate_speaker_summary(self, speaker_segments):
+        """화자별 내용 요약 생성"""
+        if not speaker_segments:
+            return {}
+        
+        summary = {}
+        
+        try:
+            # 화자별로 그룹화
+            speaker_groups = {}
+            for segment in speaker_segments:
+                speaker_id = segment['speaker']
+                if speaker_id not in speaker_groups:
+                    speaker_groups[speaker_id] = []
+                speaker_groups[speaker_id].append(segment)
+            
+            # 각 화자별 요약 정보 생성
+            for speaker_id, segments in speaker_groups.items():
+                total_duration = sum(seg['duration'] for seg in segments)
+                segment_count = len(segments)
+                
+                # 발화 시간대 정보
+                time_ranges = [(seg['start'], seg['end']) for seg in segments]
+                first_appearance = min(seg['start'] for seg in segments)
+                last_appearance = max(seg['end'] for seg in segments)
+                
+                # 평균 발화 길이
+                avg_duration = total_duration / segment_count if segment_count > 0 else 0
+                
+                # 텍스트 내용 합치기 (음성 인식 결과가 있는 경우)
+                texts = [seg.get('text', '') for seg in segments if seg.get('text')]
+                combined_text = ' '.join(texts) if texts else "음성 인식 결과 없음"
+                
+                summary[speaker_id] = {
+                    'speaker': speaker_id,
+                    'total_duration': round(total_duration, 2),
+                    'segment_count': segment_count,
+                    'avg_duration': round(avg_duration, 2),
+                    'first_appearance': round(first_appearance, 2),
+                    'last_appearance': round(last_appearance, 2),
+                    'time_ranges': time_ranges,
+                    'text_content': combined_text,
+                    'participation_rate': 0  # 전체 비디오 대비 비율, 나중에 계산
+                }
+            
+            # 전체 비디오 길이 대비 참여율 계산
+            if self.video_clip:
+                total_video_duration = self.video_clip.duration
+                for speaker_id in summary:
+                    participation_rate = (summary[speaker_id]['total_duration'] / total_video_duration) * 100
+                    summary[speaker_id]['participation_rate'] = round(participation_rate, 1)
+            
+            return summary
+            
+        except Exception as e:
+            print(f"화자 요약 생성 실패: {e}")
+            return {}
+    
+    def generate_speaker_profile(self, speaker_segments):
+        """화자별 프로필 정보 생성 (썸네일 + 요약)"""
+        thumbnails = self.generate_speaker_thumbnails(speaker_segments)
+        summaries = self.generate_speaker_summary(speaker_segments)
+        
+        profiles = {}
+        
+        # 썸네일과 요약 정보 결합
+        all_speakers = set(list(thumbnails.keys()) + list(summaries.keys()))
+        
+        for speaker_id in all_speakers:
+            profiles[speaker_id] = {
+                'speaker': speaker_id,
+                'thumbnail': thumbnails.get(speaker_id, {}),
+                'summary': summaries.get(speaker_id, {}),
+                'has_thumbnail': speaker_id in thumbnails,
+                'has_summary': speaker_id in summaries
+            }
+        
+        return profiles
+
     def __del__(self):
         """리소스 정리"""
         if self.video_clip:

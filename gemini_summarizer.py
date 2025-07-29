@@ -1,4 +1,5 @@
 import os
+import time
 import google.generativeai as genai
 from typing import List, Dict
 
@@ -31,16 +32,27 @@ class GeminiSummarizer:
             response = self.model.generate_content(prompt)
             summary = response.text.strip()
             
-            # 길이 제한
+            # 길이 제한 (문장 단위로)
             if len(summary) > max_length:
-                summary = summary[:max_length] + "..."
+                sentences = summary.split('.')
+                result = ""
+                for sentence in sentences:
+                    if len(result + sentence + ".") <= max_length:
+                        result += sentence + "."
+                    else:
+                        break
+                summary = result if result else summary[:max_length] + "..."
             
             return summary
             
         except Exception as e:
-            print(f"Gemini 요약 실패: {e}")
-            # 실패 시 간단한 요약 반환
-            return text[:max_length] + "..." if len(text) > max_length else text
+            error_msg = str(e)
+            if "429" in error_msg or "quota" in error_msg.lower():
+                print(f"Gemini API 할당량 초과: {e}")
+            else:
+                print(f"Gemini 요약 실패: {e}")
+            # API 할당량 초과 또는 기타 오류 시 간단한 요약 반환
+            return self._simple_summary(text, max_length)
     
     def summarize_conversation(self, segments: List[Dict]) -> Dict[str, str]:
         """화자별 대화 내용 요약 (화자 중심 분석)"""
@@ -75,15 +87,27 @@ class GeminiSummarizer:
                     response = self.model.generate_content(prompt)
                     summary = response.text.strip()
                     
-                    # 길이 제한 (최대 200자)
+                    # 길이 제한 (최대 200자, 문장 단위로)
                     if len(summary) > 200:
-                        summary = summary[:200] + "..."
+                        sentences = summary.split('.')
+                        result = ""
+                        for sentence in sentences:
+                            if len(result + sentence + ".") <= 200:
+                                result += sentence + "."
+                            else:
+                                break
+                        summary = result if result else summary[:200] + "..."
                     
                     speaker_summaries[speaker] = summary
                     
                 except Exception as e:
-                    print(f"{speaker} 요약 실패: {e}")
-                    speaker_summaries[speaker] = self._simple_summary(combined_text, 100)
+                    error_msg = str(e)
+                    if "429" in error_msg or "quota" in error_msg.lower():
+                        print(f"{speaker} 요약 실패 (API 할당량 초과): {e}")
+                        speaker_summaries[speaker] = f"[API 할당량 초과] {self._simple_summary(combined_text, 100)}"
+                    else:
+                        print(f"{speaker} 요약 실패: {e}")
+                        speaker_summaries[speaker] = self._simple_summary(combined_text, 100)
             else:
                 speaker_summaries[speaker] = "발화 내용이 너무 짧습니다"
         
@@ -131,8 +155,13 @@ class GeminiSummarizer:
             return response.text.strip()
             
         except Exception as e:
-            print(f"전체 요약 생성 실패: {e}")
-            return "요약 생성에 실패했습니다."
+            error_msg = str(e)
+            if "429" in error_msg or "quota" in error_msg.lower():
+                print(f"전체 요약 생성 실패 (API 할당량 초과): {e}")
+                return f"대화 참여자: {', '.join(speaker_order)}\n총 {len(all_texts)}개 발언\n[API 할당량 초과로 요약 생성 불가]"
+            else:
+                print(f"전체 요약 생성 실패: {e}")
+                return f"대화 참여자: {', '.join(speaker_order)}\n총 {len(all_texts)}개 발언\n[요약 생성 실패]"
     
     def _simple_summary(self, text: str, max_length: int = 150) -> str:
         """간단한 텍스트 요약 (API 실패 시 대체)"""
@@ -175,7 +204,11 @@ class GeminiSummarizer:
             return keywords[:num_keywords]
             
         except Exception as e:
-            print(f"키워드 추출 실패: {e}")
+            error_msg = str(e)
+            if "429" in error_msg or "quota" in error_msg.lower():
+                print(f"키워드 추출 실패 (API 할당량 초과): {e}")
+            else:
+                print(f"키워드 추출 실패: {e}")
             # 간단한 키워드 추출 대체
             words = text.split()
             word_freq = {}

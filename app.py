@@ -15,6 +15,13 @@ except Exception as e:
     print(f"Gemini 사용 불가: {e}")
     GEMINI_AVAILABLE = False
 
+try:
+    from claude_summarizer import ClaudeSummarizer
+    CLAUDE_AVAILABLE = True
+except Exception as e:
+    print(f"Claude 사용 불가: {e}")
+    CLAUDE_AVAILABLE = False
+
 # .env 파일 로드
 from dotenv import load_dotenv
 load_dotenv()
@@ -43,6 +50,48 @@ if 'gemini_summarizer' not in st.session_state:
             st.session_state.gemini_summarizer = None
     else:
         st.session_state.gemini_summarizer = None
+
+if 'claude_summarizer' not in st.session_state:
+    if CLAUDE_AVAILABLE:
+        try:
+            st.session_state.claude_summarizer = ClaudeSummarizer()
+        except Exception as e:
+            print(f"Claude 초기화 실패: {e}")
+            st.session_state.claude_summarizer = None
+    else:
+        st.session_state.claude_summarizer = None
+
+def get_summarizer():
+    """사용 가능한 요약기 반환 (Gemini 우선, 실패 시 Claude)"""
+    if st.session_state.gemini_summarizer is not None:
+        return st.session_state.gemini_summarizer, "Gemini"
+    elif st.session_state.claude_summarizer is not None:
+        return st.session_state.claude_summarizer, "Claude"
+    else:
+        return None, None
+
+def smart_summarize_text(text: str, max_length: int = 150) -> tuple:
+    """스마트 텍스트 요약 (Gemini 실패 시 Claude 자동 전환)"""
+    # 먼저 Gemini 시도
+    if st.session_state.gemini_summarizer is not None:
+        try:
+            summary = st.session_state.gemini_summarizer.summarize_text(text, max_length)
+            # API 할당량 초과 표시가 있으면 실패로 간주
+            if "[API 할당량 초과]" not in summary:
+                return summary, "Gemini"
+        except:
+            pass
+    
+    # Gemini 실패 시 Claude 시도
+    if st.session_state.claude_summarizer is not None:
+        try:
+            summary = st.session_state.claude_summarizer.summarize_text(text, max_length)
+            return summary, "Claude"
+        except:
+            pass
+    
+    # 둘 다 실패 시 기본 요약
+    return text[:max_length] + "..." if len(text) > max_length else text, "기본"
 
 st.title("🎬 CutStudio - 동영상 편집기")
 st.markdown("---")
@@ -908,10 +957,10 @@ if video_loaded and temp_file_path:
                                 if GEMINI_AVAILABLE and st.session_state.gemini_summarizer is not None:
                                     try:
                                         if text_length > 50:
-                                            # Gemini 요약 시도
-                                            summary = st.session_state.gemini_summarizer.summarize_text(text, 80)
+                                            # Gemini 요약 시도 (길이 늘림)
+                                            summary = st.session_state.gemini_summarizer.summarize_text(text, 150)
                                             st.info(f"💬 {summary}")
-                                            st.caption(f"✨ Gemini 요약 | 원본: {text_length}자")
+                                            st.caption(f"✅ Gemini 요약 완료 | 원본: {text_length}자")
                                         else:
                                             # 짧은 텍스트는 그대로 표시
                                             st.info(f"💬 {text}")
@@ -978,13 +1027,13 @@ if video_loaded and temp_file_path:
                             try:
                                 # 전체 대화 요약 (더 긴 요약)
                                 full_summary = st.session_state.gemini_summarizer.summarize_text(full_text, 200)
-                                st.success("✨ **AI 요약:**")
+                                st.success("✅ **AI 요약 완료:**")
                                 st.info(full_summary)
                                 
                                 # 키워드 추출
                                 keywords = st.session_state.gemini_summarizer.extract_keywords(full_text, 8)
                                 if keywords:
-                                    st.write("🏷️ **주요 키워드:**")
+                                    st.write("✅ **키워드 추출 완료:**")
                                     keyword_tags = " ".join([f"`{kw}`" for kw in keywords])
                                     st.markdown(keyword_tags)
                                 
@@ -1044,7 +1093,7 @@ if video_loaded and temp_file_path:
                                     # 화자별 요약 (회의 분석 대신 화자별 분석으로 변경)
                                     speaker_summaries = st.session_state.gemini_summarizer.summarize_conversation(segments_for_analysis)
                                     if speaker_summaries:
-                                        st.write("**👤 화자별 발언 요약:**")
+                                        st.write("**✅ 화자별 발언 요약 완료:**")
                                         for speaker, summary in speaker_summaries.items():
                                             if summary and summary != "발화 내용 없음":
                                                 st.write(f"**🎤 {speaker}:**")
@@ -1082,7 +1131,7 @@ if video_loaded and temp_file_path:
                             try:
                                 test_text = "이것은 Gemini API 테스트를 위한 긴 텍스트입니다. 여러 문장을 포함하고 있으며, API가 제대로 작동하는지 확인하기 위한 목적으로 작성되었습니다. 이 텍스트가 제대로 요약되면 Gemini API가 정상적으로 작동하는 것입니다."
                                 result = st.session_state.gemini_summarizer.summarize_text(test_text, 50)
-                                st.success("✅ Gemini API 작동 중!")
+                                st.success("✅ Gemini API 테스트 완료!")
                                 st.write(f"**원본:** {test_text}")
                                 st.write(f"**요약:** {result}")
                             except Exception as e:
@@ -1421,7 +1470,7 @@ if video_loaded and temp_file_path:
                 speakers_list = list(set(seg['speaker'] for seg in st.session_state.speaker_segments))
                 selected_speaker = st.selectbox("특정 화자 선택", speakers_list)
                 
-                if st.button(f"{selected_speaker}의 모든 구간 합치기", type="secondary"):
+                if selected_speaker and st.button(f"{selected_speaker}의 모든 구간 합치기", type="secondary"):
                     with st.spinner(f"{selected_speaker}의 구간을 합치는 중..."):
                         output_path = st.session_state.video_editor.cut_single_speaker(selected_speaker)
                         

@@ -2,7 +2,7 @@ import os
 import tempfile
 from moviepy.editor import VideoFileClip
 from pydub import AudioSegment
-import speech_recognition as sr
+import speech_recognition as speech_recog
 import json
 import numpy as np
 from scipy.io import wavfile
@@ -32,7 +32,7 @@ except ImportError:
 
 class SpeakerDetector:
     def __init__(self):
-        self.recognizer = sr.Recognizer()
+        self.recognizer = speech_recog.Recognizer()
         self.pipeline = None
         if PYANNOTE_AVAILABLE and torch:
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -620,7 +620,7 @@ class SpeakerDetector:
                 
                 # 음성 인식
                 try:
-                    with sr.AudioFile(temp_path) as source:
+                    with speech_recog.AudioFile(temp_path) as source:
                         audio_data = self.recognizer.record(source)
                         text = self.recognizer.recognize_google(audio_data, language='ko-KR')
                         segment['text'] = text
