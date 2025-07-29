@@ -7,6 +7,13 @@ import time
 from video_editor import VideoEditor
 from utils import get_video_info, format_time
 from youtube_downloader import YouTubeDownloader
+from speech_transcriber import SpeechRecognizer, AdvancedSpeechAnalyzer
+try:
+    from gemini_summarizer import GeminiSummarizer
+    GEMINI_AVAILABLE = True
+except Exception as e:
+    print(f"Gemini 사용 불가: {e}")
+    GEMINI_AVAILABLE = False
 
 # .env 파일 로드
 from dotenv import load_dotenv
@@ -23,6 +30,19 @@ if 'video_editor' not in st.session_state:
 
 if 'youtube_downloader' not in st.session_state:
     st.session_state.youtube_downloader = YouTubeDownloader()
+
+if 'speech_recognizer' not in st.session_state:
+    st.session_state.speech_recognizer = None
+
+if 'gemini_summarizer' not in st.session_state:
+    if GEMINI_AVAILABLE:
+        try:
+            st.session_state.gemini_summarizer = GeminiSummarizer()
+        except Exception as e:
+            print(f"Gemini 초기화 실패: {e}")
+            st.session_state.gemini_summarizer = None
+    else:
+        st.session_state.gemini_summarizer = None
 
 st.title("🎬 CutStudio - 동영상 편집기")
 st.markdown("---")
@@ -403,30 +423,144 @@ if video_loaded and temp_file_path:
                 use_practical = detection_method.startswith("실용적")
                 use_huggingface = detection_method.startswith("허깅페이스")
                 
-                # 감지 시작
+                # 시작 시간 기록
                 start_time = time.time()
                 
-                # 진행률 표시
-                if detection_method.startswith("허깅페이스"):
-                    progress_bar = st.progress(0)
-                    status_text = st.empty()
-                    
-                    # 주기적으로 진행 상황 업데이트 (실제로는 추정치)
-                    status_text.text("모델 초기화 중...")
-                    progress_bar.progress(10)
+                # 예상 시간 계산
+                estimated_total = 60  # 기본값
+                if detection_method.startswith("허깅페이스") and duration:
+                    estimated_total = max(duration * 0.4, 30)
+                elif detection_method.startswith("실용적"):
+                    estimated_total = 120
+                elif detection_method.startswith("고급"):
+                    estimated_total = max(duration * 0.8, 180)
+                elif detection_method.startswith("간단"):
+                    estimated_total = 30
                 
-                segments = st.session_state.video_editor.detect_speakers(
-                    min_duration, 
-                    num_speakers=num_speakers,
-                    use_simple=use_simple,
-                    use_advanced=use_advanced,
-                    use_enhanced=use_enhanced,
-                    use_practical=use_practical,
-                    use_huggingface=use_huggingface
-                )
+                # 시작 시간과 예상 종료 시간 계산
+                start_time_str = time.strftime('%H:%M:%S')
+                estimated_end_time = start_time + estimated_total
+                estimated_end_str = time.strftime('%H:%M:%S', time.localtime(estimated_end_time))
                 
-                # 소요 시간 표시
+                # Streamlit 네이티브 컴포넌트로 시작 정보 표시
+                st.success("🎯 **화자 구간 감지 시작**")
+                
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    st.metric(
+                        label="🚀 시작 시간",
+                        value=start_time_str
+                    )
+                
+                with col2:
+                    st.metric(
+                        label="🏁 예상 종료",
+                        value=estimated_end_str
+                    )
+                
+                with col3:
+                    st.metric(
+                        label="⏱️ 예상 소요",
+                        value=f"{int(estimated_total//60)}분 {int(estimated_total%60)}초"
+                    )
+                
+                st.info(f"🤖 **사용 방법**: {detection_method}")
+                st.info(f"📺 **동영상 길이**: {format_time(duration) if duration else '알 수 없음'}")
+                
+                # 단계별 진행 상황 표시
+                with st.expander("📋 처리 단계", expanded=True):
+                    st.write("🔄 **1단계**: 오디오 추출 및 전처리")
+                    st.write("🔄 **2단계**: 음성 특징 분석") 
+                    st.write("🔄 **3단계**: 화자 클러스터링")
+                    st.write("🔄 **4단계**: 결과 후처리")
+                    st.info(f"🤖 현재 사용 중인 방법: **{detection_method}**")
+                
+                # 화자 감지 실행 (st.spinner 사용)
+                with st.spinner("🎯 화자 구간을 분석하는 중... 처리 시간이 오래 걸릴 수 있습니다."):
+                    segments = st.session_state.video_editor.detect_speakers(
+                        min_duration, 
+                        num_speakers=num_speakers,
+                        use_simple=use_simple,
+                        use_advanced=use_advanced,
+                        use_enhanced=use_enhanced,
+                        use_practical=use_practical,
+                        use_huggingface=use_huggingface
+                    )
+                
+                # 최종 완료 시간
                 elapsed_time = time.time() - start_time
+                end_time = time.strftime('%H:%M:%S')
+                
+                # 실제 완료 시간과 비교 분석
+                actual_end_time = time.time()
+                actual_end_str = time.strftime('%H:%M:%S', time.localtime(actual_end_time))
+                time_diff = elapsed_time - estimated_total
+                estimated_end_str = time.strftime('%H:%M:%S', time.localtime(start_time + estimated_total))
+                
+                # Streamlit 네이티브 컴포넌트로 완료 정보 표시
+                st.success("🎉 **처리 완료!**")
+                
+                # 시간 정보 표시
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    st.metric(
+                        label="🚀 시작 시간",
+                        value=time.strftime('%H:%M:%S', time.localtime(start_time))
+                    )
+                
+                with col2:
+                    st.metric(
+                        label="🏁 완료 시간",
+                        value=actual_end_str
+                    )
+                
+                with col3:
+                    st.metric(
+                        label="⏱️ 총 소요시간",
+                        value=f"{int(elapsed_time//60)}분 {elapsed_time%60:.1f}초"
+                    )
+                
+                # 예상 vs 실제 비교
+                st.info("📊 **예상 vs 실제 비교**")
+                
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    st.write(f"**예상 종료**: {estimated_end_str}")
+                with col_b:
+                    st.write(f"**실제 종료**: {actual_end_str}")
+                
+                # 성능 분석
+                time_diff_msg = ""
+                if time_diff < -10:
+                    time_diff_msg = f"🚀 **{abs(int(time_diff))}초 빨랐습니다!**"
+                    st.success(time_diff_msg)
+                elif time_diff > 30:
+                    time_diff_msg = f"⏰ **{int(time_diff)}초 더 걸렸습니다.**"
+                    st.warning(time_diff_msg)
+                else:
+                    time_diff_msg = "✨ **예상 시간과 거의 일치합니다!**"
+                    st.info(time_diff_msg)
+                
+                # 성능 평가 메시지
+                if elapsed_time < estimated_total * 0.7:
+                    st.success(f"🚀 예상보다 **{estimated_total - elapsed_time:.1f}초** 빠르게 완료되었습니다!")
+                elif elapsed_time > estimated_total * 1.5:
+                    st.warning(f"⏰ 예상보다 **{elapsed_time - estimated_total:.1f}초** 더 걸렸습니다. 복잡한 오디오이거나 시스템 부하가 있을 수 있습니다.")
+                else:
+                    st.info("✨ 예상 시간 범위 내에 완료되었습니다.")
+                
+                # 결과 요약
+                st.success(f"🎉 처리 완료! 총 소요 시간: **{elapsed_time:.1f}초**")
+                
+                # 성능 평가
+                if elapsed_time < estimated_total * 0.7:
+                    st.info("🚀 예상보다 **빠르게** 완료되었습니다!")
+                elif elapsed_time > estimated_total * 1.3:
+                    st.warning("⏰ 예상보다 시간이 **오래** 걸렸습니다. 긴 동영상이거나 복잡한 오디오일 수 있습니다.")
+                else:
+                    st.info("✨ 예상 시간 내에 완료되었습니다.")
                 
                 if segments:
                     st.session_state.speaker_segments = segments
@@ -444,55 +578,816 @@ if video_loaded and temp_file_path:
                     st.write("**화자별 통계:**")
                     for speaker, stats in speakers.items():
                         st.write(f"- {speaker}: {stats['count']}개 구간, 총 {format_time(stats['total_duration'])}")
+                    
+                    # 자동으로 음성 인식 실행
+                    st.info("🎤 자동으로 음성 인식을 시작합니다...")
+                    
+                    # Whisper 모델 초기화 (tiny 모델 사용)
+                    if st.session_state.speech_recognizer is None:
+                        with st.spinner("Whisper 모델 로딩 중..."):
+                            st.session_state.speech_recognizer = SpeechRecognizer("tiny")
+                    
+                    if st.session_state.speech_recognizer.model is not None:
+                        with st.spinner("🗣️ 음성 인식 중... (시간이 걸릴 수 있습니다)"):
+                            # 전체 비디오 음성 인식
+                            result = st.session_state.speech_recognizer.transcribe_video(
+                                st.session_state.video_editor.video_path,
+                                language="ko"
+                            )
+                            
+                            if result:
+                                st.session_state.full_transcription = result
+                                
+                                if 'segments' in result:
+                                    # 인식된 텍스트를 화자 세그먼트에 매핑
+                                    recognized_segments = []
+                                    whisper_segments = result['segments']
+                                    
+                                    for seg in segments:
+                                        seg_copy = seg.copy()
+                                        seg_copy['text'] = ""
+                                        matched_texts = []
+                                        
+                                        seg_start = seg['start']
+                                        seg_end = seg['end']
+                                        
+                                        for whisper_seg in whisper_segments:
+                                            w_start = whisper_seg['start']
+                                            w_end = whisper_seg['end']
+                                            
+                                            if (w_start < seg_end and w_end > seg_start):
+                                                overlap_start = max(w_start, seg_start)
+                                                overlap_end = min(w_end, seg_end)
+                                                overlap_duration = overlap_end - overlap_start
+                                                
+                                                if overlap_duration > 0.2 * (w_end - w_start):
+                                                    matched_texts.append(whisper_seg['text'].strip())
+                                        
+                                        seg_copy['text'] = " ".join(matched_texts)
+                                        seg_copy['has_text'] = bool(seg_copy['text'])
+                                        recognized_segments.append(seg_copy)
+                                    
+                                    st.session_state.recognized_segments = recognized_segments
+                                    
+                                    # 인식된 텍스트 개수 확인
+                                    text_count = sum(1 for seg in recognized_segments if seg.get('text', '').strip())
+                                    st.success(f"✅ 음성 인식 완료! {text_count}/{len(recognized_segments)}개 구간에서 음성 감지")
+                                else:
+                                    st.warning("음성 인식 결과가 없습니다.")
+                            else:
+                                st.error("음성 인식에 실패했습니다.")
+                    else:
+                        st.error("Whisper 모델 로딩에 실패했습니다.")
                 else:
                     st.warning("화자 구간을 감지하지 못했습니다.")
         
         # 화자 구간이 감지된 경우
         if 'speaker_segments' in st.session_state and st.session_state.speaker_segments:
             st.markdown("---")
-            st.write("**화자별 구간 정보:**")
             
-            # 구간 정보를 표로 표시 (편집 가능)
-            st.write("**💡 팁:** 화자 열을 클릭하여 수정할 수 있습니다.")
+            # 화자별 프로필 생성 및 표시
+            st.subheader("👥 화자별 프로필")
             
-            segment_data = []
-            for i, seg in enumerate(st.session_state.speaker_segments):
-                segment_data.append({
-                    '번호': i + 1,
-                    '화자': seg['speaker'],
-                    '시작': format_time(seg['start']),
-                    '종료': format_time(seg['end']),
-                    '길이': format_time(seg['duration']),
-                    '신뢰도': f"{seg.get('confidence', 0.8):.1%}" if 'confidence' in seg else "N/A"
-                })
+            # 화자별 프로필 정보 생성
+            speaker_profiles = st.session_state.video_editor.generate_speaker_profile(st.session_state.speaker_segments)
             
-            # 편집 가능한 데이터프레임
-            edited_df = st.data_editor(
-                segment_data, 
-                column_config={
-                    "번호": st.column_config.NumberColumn("번호", disabled=True),
-                    "화자": st.column_config.SelectboxColumn(
-                        "화자",
-                        help="클릭하여 화자를 변경할 수 있습니다",
-                        options=[f"SPEAKER_{i}" for i in range(6)],
-                        required=True,
-                    ),
-                    "시작": st.column_config.TextColumn("시작", disabled=True),
-                    "종료": st.column_config.TextColumn("종료", disabled=True),
-                    "길이": st.column_config.TextColumn("길이", disabled=True),
-                    "신뢰도": st.column_config.TextColumn("신뢰도", disabled=True)
-                },
-                use_container_width=True,
-                hide_index=True,
-                key="speaker_segments_editor"
-            )
+            if speaker_profiles:
+                # 탭으로 프로필과 상세 정보 분리
+                profile_tab, detail_tab, transcript_tab = st.tabs(["👤 프로필", "📊 상세 통계", "📝 음성 인식"])
+                
+                with profile_tab:
+                    # 화자별 프로필 카드 표시
+                    speakers = list(speaker_profiles.keys())
+                    cols = st.columns(min(len(speakers), 3))  # 최대 3열로 표시
+                    
+                    for i, speaker_id in enumerate(speakers):
+                        with cols[i % 3]:
+                            profile = speaker_profiles[speaker_id]
+                            
+                            # 프로필 카드
+                            with st.container():
+                                st.markdown(f"### {speaker_id}")
+                                
+                                # 썸네일 표시
+                                if profile['has_thumbnail']:
+                                    thumbnail = profile['thumbnail']
+                                    st.image(
+                                        f"data:image/jpeg;base64,{thumbnail['image_base64']}",
+                                        caption=f"타임스탬프: {format_time(thumbnail['timestamp'])}",
+                                        width=150
+                                    )
+                                else:
+                                    st.info("썸네일 생성 실패")
+                                
+                                # 요약 정보 표시
+                                if profile['has_summary']:
+                                    summary = profile['summary']
+                                    st.metric("총 발화 시간", f"{format_time(summary['total_duration'])}")
+                                    st.metric("발화 횟수", f"{summary['segment_count']}회")
+                                    st.metric("참여율", f"{summary['participation_rate']}%")
+                                    
+                                    # 첫 등장 시간
+                                    st.write(f"**첫 등장:** {format_time(summary['first_appearance'])}")
+                                    st.write(f"**마지막 등장:** {format_time(summary['last_appearance'])}")
+                                
+                                st.markdown("---")
+                
+                with detail_tab:
+                    st.write("**화자별 상세 통계:**")
+                    
+                    # 통계 테이블 생성
+                    stats_data = []
+                    for speaker_id, profile in speaker_profiles.items():
+                        if profile['has_summary']:
+                            summary = profile['summary']
+                            stats_data.append({
+                                '화자': speaker_id,
+                                '총 발화 시간': format_time(summary['total_duration']),
+                                '발화 횟수': summary['segment_count'],
+                                '평균 발화 길이': format_time(summary['avg_duration']),
+                                '참여율 (%)': summary['participation_rate'],
+                                '첫 등장': format_time(summary['first_appearance']),
+                                '마지막 등장': format_time(summary['last_appearance'])
+                            })
+                    
+                    if stats_data:
+                        st.dataframe(stats_data, use_container_width=True)
+                
+                with transcript_tab:
+                    st.write("**음성 인식 및 내용 요약**")
+                    
+                    # 음성 인식 초기화 확인
+                    if st.session_state.speech_recognizer is None:
+                        st.info("음성 인식 기능을 초기화하려면 아래 버튼을 클릭하세요.")
+                        
+                        col1, col2 = st.columns([1, 2])
+                        with col1:
+                            model_size = st.selectbox(
+                                "Whisper 모델 크기",
+                                ["tiny", "base", "small", "medium"],
+                                index=1,
+                                help="tiny: 빠름/낮은 정확도, base: 균형, small: 높은 정확도, medium: 최고 정확도/느림"
+                            )
+                        
+                        if st.button("음성 인식 초기화", type="primary"):
+                            with st.spinner("Whisper 모델을 로딩하는 중..."):
+                                st.session_state.speech_recognizer = SpeechRecognizer(model_size)
+                                if st.session_state.speech_recognizer.model is not None:
+                                    st.success("음성 인식기가 초기화되었습니다!")
+                                    st.rerun()
+                                else:
+                                    st.error("음성 인식기 초기화에 실패했습니다.")
+                    
+                    else:
+                        # 음성 인식 실행 옵션
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            language = st.selectbox(
+                                "언어 선택",
+                                ["ko", "en", "auto"],
+                                index=0,
+                                help="ko: 한국어, en: 영어, auto: 자동 감지"
+                            )
+                        
+                        with col2:
+                            include_summary = st.checkbox("대화 내용 요약 포함", value=True)
+                        
+                        if st.button("음성 인식 실행", type="primary"):
+                            with st.spinner("음성 인식을 실행하는 중..."):
+                                # 화자별 세그먼트에 음성 인식 적용
+                                recognized_segments = st.session_state.speech_recognizer.transcribe_segments(
+                                    st.session_state.video_editor.video_path,
+                                    st.session_state.speaker_segments,
+                                    language=language
+                                )
+                                
+                                if recognized_segments:
+                                    st.session_state.recognized_segments = recognized_segments
+                                    st.success("음성 인식이 완료되었습니다!")
+                                else:
+                                    st.error("음성 인식에 실패했습니다.")
+                        
+                        # 음성 인식 결과 표시
+                        if 'recognized_segments' in st.session_state:
+                            st.markdown("### 📝 음성 인식 결과")
+                            
+                            # 화자별로 그룹화하여 표시
+                            recognized_by_speaker = {}
+                            for segment in st.session_state.recognized_segments:
+                                speaker = segment['speaker']
+                                if speaker not in recognized_by_speaker:
+                                    recognized_by_speaker[speaker] = []
+                                recognized_by_speaker[speaker].append(segment)
+                            
+                            for speaker_id, segments in recognized_by_speaker.items():
+                                with st.expander(f"{speaker_id} 발화 내용", expanded=True):
+                                    for i, segment in enumerate(segments):
+                                        if segment.get('has_text', False):
+                                            st.write(f"**{format_time(segment['start'])} - {format_time(segment['end'])}**")
+                                            st.write(f"🗣️ {segment['text']}")
+                                            st.markdown("---")
+                                        else:
+                                            st.write(f"**{format_time(segment['start'])} - {format_time(segment['end'])}**: *음성 인식 결과 없음*")
+                            
+                            # 대화 요약 생성
+                            if include_summary:
+                                st.markdown("### 📋 대화 요약")
+                                
+                                analyzer = AdvancedSpeechAnalyzer(st.session_state.speech_recognizer)
+                                meeting_summary = analyzer.generate_meeting_summary(st.session_state.recognized_segments)
+                                
+                                if meeting_summary:
+                                    st.text_area(
+                                        "종합 요약",
+                                        meeting_summary,
+                                        height=300,
+                                        disabled=True
+                                    )
+                                
+                                # 대화 흐름 분석
+                                conversation_analysis = analyzer.analyze_conversation_flow(st.session_state.recognized_segments)
+                                
+                                if conversation_analysis.get('timeline'):
+                                    st.markdown("### 🕒 대화 타임라인")
+                                    
+                                    timeline_data = []
+                                    for item in conversation_analysis['timeline']:
+                                        timeline_data.append({
+                                            '시간': format_time(item['time']),
+                                            '화자': item['speaker'],
+                                            '내용': item['text'],
+                                            '길이': format_time(item['duration'])
+                                        })
+                                    
+                                    st.dataframe(timeline_data, use_container_width=True)
             
-            # 변경사항 적용 버튼
-            if st.button("변경사항 적용", type="secondary"):
-                # 편집된 데이터로 session_state 업데이트
-                for i, row in edited_df.iterrows():
-                    st.session_state.speaker_segments[i]['speaker'] = row['화자']
-                st.success("화자 정보가 업데이트되었습니다!")
+            st.markdown("---")
+            st.subheader("🎬 전체 대화 타임라인")
+            
+            # 시간순으로 정렬
+            sorted_segments = sorted(st.session_state.speaker_segments, key=lambda x: x['start'])
+            
+            # 화자별 프로필 정보 생성 (썸네일 포함)
+            all_profiles = st.session_state.video_editor.generate_speaker_profile(sorted_segments)
+            
+            # 음성 인식이 있는 경우 텍스트 매핑
+            segment_texts = {}
+            if 'recognized_segments' in st.session_state:
+                for rec_seg in st.session_state.recognized_segments:
+                    key = f"{rec_seg['start']:.1f}_{rec_seg['end']:.1f}"
+                    segment_texts[key] = rec_seg.get('text', '')
+            
+            # 전체 타임라인 표시
+            st.info(f"📊 총 {len(sorted_segments)}개의 발화 구간")
+            
+            # 세그먼트를 행당 4개씩 표시
+            cols_per_row = 4
+            for i in range(0, len(sorted_segments), cols_per_row):
+                cols = st.columns(cols_per_row)
+                
+                for j, seg in enumerate(sorted_segments[i:i+cols_per_row]):
+                    if j < len(cols):
+                        with cols[j]:
+                            # 썸네일 생성
+                            try:
+                                if st.session_state.video_editor.video_clip:
+                                    mid_time = (seg['start'] + seg['end']) / 2
+                                    frame = st.session_state.video_editor.video_clip.get_frame(mid_time)
+                                    
+                                    from PIL import Image
+                                    import base64
+                                    import io
+                                    
+                                    pil_image = Image.fromarray(frame)
+                                    pil_image.thumbnail((200, 150), Image.Resampling.LANCZOS)
+                                    
+                                    # Base64 인코딩
+                                    buffer = io.BytesIO()
+                                    pil_image.save(buffer, format='JPEG', quality=85)
+                                    img_str = base64.b64encode(buffer.getvalue()).decode()
+                                    
+                                    # 썸네일 표시
+                                    st.image(f"data:image/jpeg;base64,{img_str}", use_container_width=True)
+                            except:
+                                st.image("https://via.placeholder.com/200x150?text=No+Thumbnail", use_container_width=True)
+                            
+                            # 화자 정보
+                            speaker_color = {
+                                'SPEAKER_0': '🔴',
+                                'SPEAKER_1': '🔵', 
+                                'SPEAKER_2': '🟢',
+                                'SPEAKER_3': '🟡',
+                                'SPEAKER_4': '🟣',
+                                'SPEAKER_5': '🟤'
+                            }
+                            
+                            speaker_emoji = speaker_color.get(seg['speaker'], '⚪')
+                            st.markdown(f"### {speaker_emoji} {seg['speaker']}")
+                            
+                            # 시간 정보
+                            st.caption(f"⏱️ {format_time(seg['start'])} - {format_time(seg['end'])}")
+                            st.caption(f"📏 길이: {format_time(seg['duration'])}")
+                            
+                            # 텍스트/요약
+                            seg_key = f"{seg['start']:.1f}_{seg['end']:.1f}"
+                            text = segment_texts.get(seg_key, '')
+                            
+                            # recognized_segments에서 직접 찾기
+                            if not text and 'recognized_segments' in st.session_state:
+                                for rec_seg in st.session_state.recognized_segments:
+                                    if (abs(rec_seg['start'] - seg['start']) < 1.0 and 
+                                        abs(rec_seg['end'] - seg['end']) < 1.0):
+                                        text = rec_seg.get('text', '').strip()
+                                        break
+                            
+                            if text:
+                                # 텍스트 길이 확인
+                                text_length = len(text)
+                                
+                                # Gemini로 요약 시도 (임계값 50자로 낮춤)
+                                if GEMINI_AVAILABLE and st.session_state.gemini_summarizer is not None:
+                                    try:
+                                        if text_length > 50:
+                                            # Gemini 요약 시도
+                                            summary = st.session_state.gemini_summarizer.summarize_text(text, 80)
+                                            st.info(f"💬 {summary}")
+                                            st.caption(f"✨ Gemini 요약 | 원본: {text_length}자")
+                                        else:
+                                            # 짧은 텍스트는 그대로 표시
+                                            st.info(f"💬 {text}")
+                                            st.caption(f"원본 텍스트 | {text_length}자")
+                                    except Exception as e:
+                                        # 에러 발생 시 더 나은 기본 요약
+                                        st.warning(f"⚠️ Gemini 요약 실패: {str(e)}")
+                                        # 문장 단위로 더 나은 기본 요약
+                                        sentences = text.replace('?', '.').replace('!', '.').split('.')
+                                        sentences = [s.strip() for s in sentences if s.strip()]
+                                        if sentences:
+                                            summary = sentences[0]
+                                            if len(summary) > 80:
+                                                summary = summary[:80] + "..."
+                                        else:
+                                            summary = text[:80] + "..." if text_length > 80 else text
+                                        st.info(f"💬 {summary}")
+                                        st.caption(f"기본 요약 (Gemini 오류) | 원본: {text_length}자")
+                                else:
+                                    # Gemini 사용 불가 시 더 나은 기본 요약
+                                    sentences = text.replace('?', '.').replace('!', '.').split('.')
+                                    sentences = [s.strip() for s in sentences if s.strip()]
+                                    if sentences and len(sentences) > 1:
+                                        # 첫 문장 + 키워드
+                                        summary = sentences[0]
+                                        if len(summary) > 60:
+                                            summary = summary[:60] + "..."
+                                        st.info(f"💬 {summary}")
+                                        st.caption(f"기본 요약 | 원본: {text_length}자")
+                                    else:
+                                        # 텍스트가 짧거나 문장 분리 실패
+                                        summary = text[:80] + "..." if text_length > 80 else text
+                                        st.info(f"💬 {summary}")
+                                        st.caption(f"원본 텍스트 | {text_length}자")
+                            else:
+                                st.caption("🔇 음성 인식 필요")
+                            
+                            # 구분선
+                            st.markdown("---")
+                    
+            # 음성 인식 버튼 추가
+            st.markdown("---")
+            
+            # 전체 음성 인식 결과 표시 (화자 구분 없이)
+            if 'full_transcription' in st.session_state and st.session_state.full_transcription:
+                with st.expander("📝 전체 음성 인식 결과", expanded=True):
+                    full_text = st.session_state.full_transcription.get('text', '')
+                    
+                    # 전체 텍스트 요약 생성
+                    if full_text and len(full_text.strip()) > 100:
+                        # 요약 헤더와 버튼
+                        col1, col2 = st.columns([3, 1])
+                        with col1:
+                            st.subheader("📋 전체 대화 요약")
+                        with col2:
+                            if st.button("🔄 요약 새로고침", key="refresh_summary"):
+                                # 요약 캐시 삭제하고 새로고침
+                                if 'summary_cache' in st.session_state:
+                                    del st.session_state.summary_cache
+                                st.rerun()
+                        
+                        # Gemini로 전체 요약 시도
+                        if GEMINI_AVAILABLE and st.session_state.gemini_summarizer is not None:
+                            try:
+                                # 전체 대화 요약 (더 긴 요약)
+                                full_summary = st.session_state.gemini_summarizer.summarize_text(full_text, 200)
+                                st.success("✨ **AI 요약:**")
+                                st.info(full_summary)
+                                
+                                # 키워드 추출
+                                keywords = st.session_state.gemini_summarizer.extract_keywords(full_text, 8)
+                                if keywords:
+                                    st.write("🏷️ **주요 키워드:**")
+                                    keyword_tags = " ".join([f"`{kw}`" for kw in keywords])
+                                    st.markdown(keyword_tags)
+                                
+                            except Exception as e:
+                                st.warning(f"⚠️ AI 요약 실패: {str(e)}")
+                                # 기본 요약
+                                sentences = full_text.replace('?', '.').replace('!', '.').split('.')
+                                sentences = [s.strip() for s in sentences if s.strip()]
+                                if len(sentences) > 3:
+                                    summary = '. '.join(sentences[:3]) + '.'
+                                else:
+                                    summary = full_text[:200] + "..."
+                                st.info(f"📝 **기본 요약:** {summary}")
+                        else:
+                            # Gemini 사용 불가 시 기본 요약
+                            sentences = full_text.replace('?', '.').replace('!', '.').split('.')
+                            sentences = [s.strip() for s in sentences if s.strip()]
+                            if len(sentences) > 3:
+                                summary = '. '.join(sentences[:3]) + '.'
+                            else:
+                                summary = full_text[:200] + "..."
+                            st.info(f"📝 **기본 요약:** {summary}")
+                        
+                        # 통계 정보
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("총 글자 수", f"{len(full_text):,}자")
+                        with col2:
+                            word_count = len(full_text.split())
+                            st.metric("총 단어 수", f"{word_count:,}개")
+                        with col3:
+                            if 'segments' in st.session_state.full_transcription:
+                                seg_count = len(st.session_state.full_transcription['segments'])
+                                st.metric("음성 세그먼트", f"{seg_count}개")
+                        
+                        st.markdown("---")
+                    
+                    # 화자별 종합 분석 (음성 인식된 세그먼트가 있는 경우)
+                    if 'recognized_segments' in st.session_state and st.session_state.recognized_segments:
+                        st.subheader("👥 화자별 대화 분석")
+                        
+                        # Gemini로 회의/대화 종합 요약
+                        if GEMINI_AVAILABLE and st.session_state.gemini_summarizer is not None:
+                            try:
+                                # 화자별 세그먼트 준비
+                                segments_for_analysis = []
+                                for seg in st.session_state.recognized_segments:
+                                    if seg.get('text', '').strip():
+                                        segments_for_analysis.append({
+                                            'speaker': seg['speaker'],
+                                            'text': seg['text'],
+                                            'start': seg['start'],
+                                            'end': seg['end']
+                                        })
+                                
+                                if segments_for_analysis:
+                                    # 화자별 요약 (회의 분석 대신 화자별 분석으로 변경)
+                                    speaker_summaries = st.session_state.gemini_summarizer.summarize_conversation(segments_for_analysis)
+                                    if speaker_summaries:
+                                        st.write("**👤 화자별 발언 요약:**")
+                                        for speaker, summary in speaker_summaries.items():
+                                            if summary and summary != "발화 내용 없음":
+                                                st.write(f"**🎤 {speaker}:**")
+                                                st.info(summary)
+                                
+                            except Exception as e:
+                                st.warning(f"⚠️ 화자별 분석 실패: {str(e)}")
+                        
+                        st.markdown("---")
+                    
+            
+            # 전체 텍스트 원본 (별도 expander)
+            if 'full_transcription' in st.session_state and st.session_state.full_transcription:
+                full_text = st.session_state.full_transcription.get('text', '')
+                if full_text:
+                    with st.expander("📄 전체 텍스트 원본", expanded=False):
+                        st.write("**전체 텍스트:**")
+                        st.text_area("", full_text, height=200, disabled=True)
+                    
+                    # 세그먼트별 상세 (별도 expander)
+                    if 'segments' in st.session_state.full_transcription:
+                        with st.expander(f"🔍 세그먼트별 상세 ({len(st.session_state.full_transcription['segments'])}개)", expanded=False):
+                            for i, seg in enumerate(st.session_state.full_transcription['segments']):
+                                st.write(f"{i+1}. [{seg['start']:.1f}s - {seg['end']:.1f}s]: {seg['text']}")
+            
+            # Gemini API 상태 확인 (별도 expander)
+            with st.expander("🤖 Gemini API 상태", expanded=False):
+                st.write(f"**Gemini 사용 가능:** {'✅ Yes' if GEMINI_AVAILABLE else '❌ No'}")
+                if GEMINI_AVAILABLE:
+                    st.write(f"**Gemini 초기화:** {'✅ Yes' if st.session_state.gemini_summarizer is not None else '❌ No'}")
+                    
+                    if st.session_state.gemini_summarizer is not None:
+                        # Gemini 테스트
+                        if st.button("🧪 Gemini 테스트", key="test_gemini"):
+                            try:
+                                test_text = "이것은 Gemini API 테스트를 위한 긴 텍스트입니다. 여러 문장을 포함하고 있으며, API가 제대로 작동하는지 확인하기 위한 목적으로 작성되었습니다. 이 텍스트가 제대로 요약되면 Gemini API가 정상적으로 작동하는 것입니다."
+                                result = st.session_state.gemini_summarizer.summarize_text(test_text, 50)
+                                st.success("✅ Gemini API 작동 중!")
+                                st.write(f"**원본:** {test_text}")
+                                st.write(f"**요약:** {result}")
+                            except Exception as e:
+                                st.error(f"❌ Gemini API 오류: {str(e)}")
+                else:
+                    st.info("Gemini API를 사용하려면 google-generativeai 패키지가 필요합니다.")
+                    st.code("pip install google-generativeai")
+            
+            # 음성 인식 디버그 옵션
+            with st.expander("🔧 음성 인식 디버그", expanded=False):
+                if st.button("🧪 음성 인식 테스트 (첫 30초)", key="test_whisper"):
+                    with st.spinner("테스트 중..."):
+                        if st.session_state.speech_recognizer is None:
+                            st.session_state.speech_recognizer = SpeechRecognizer("tiny")
+                        
+                        # 비디오 경로 확인
+                        video_path = st.session_state.video_editor.video_path
+                        st.write(f"비디오 경로: {video_path}")
+                        
+                        # 간단한 테스트 - 첫 30초만
+                        try:
+                            import tempfile
+                            from moviepy.editor import VideoFileClip
+                            
+                            # 첫 30초만 추출
+                            with VideoFileClip(video_path) as video:
+                                test_duration = min(30, video.duration)
+                                subclip = video.subclip(0, test_duration)
+                                
+                                # 임시 파일로 저장
+                                temp_path = tempfile.mktemp(suffix='.mp4')
+                                subclip.write_videofile(temp_path, verbose=False, logger=None)
+                                
+                                # Whisper 테스트
+                                result = st.session_state.speech_recognizer.transcribe_video(temp_path, language="ko")
+                                
+                                if result and 'text' in result:
+                                    st.success("✅ 음성 인식 성공!")
+                                    st.write("전체 텍스트:", result['text'])
+                                    
+                                    if 'segments' in result:
+                                        st.write(f"세그먼트 수: {len(result['segments'])}")
+                                        for i, seg in enumerate(result['segments'][:5]):  # 첫 5개만
+                                            st.write(f"{i+1}. [{seg['start']:.1f}s - {seg['end']:.1f}s]: {seg['text']}")
+                                else:
+                                    st.error("❌ 음성 인식 실패: 텍스트 없음")
+                                
+                                # 임시 파일 삭제
+                                import os
+                                if os.path.exists(temp_path):
+                                    os.remove(temp_path)
+                                    
+                        except Exception as e:
+                            st.error(f"테스트 실패: {str(e)}")
+                            import traceback
+                            st.code(traceback.format_exc())
+            
+            # 수동 음성 인식 옵션 (이미 자동 실행된 경우 표시)
+            if 'recognized_segments' in st.session_state and st.session_state.recognized_segments:
+                st.success("✅ 음성 인식이 이미 완료되었습니다!")
+                
+                # 재실행 옵션
+                with st.expander("🔄 다른 모델로 재실행", expanded=False):
+                    col1, col2 = st.columns([1, 2])
+                    with col1:
+                        whisper_model = st.selectbox(
+                            "🎙️ Whisper 모델",
+                            ["tiny", "base", "small"],
+                            index=0,
+                            help="tiny: 빠름(39MB), base: 균형(74MB), small: 정확(244MB)"
+                        )
+                    
+                    if st.button("🔄 음성 인식 재실행", type="secondary", key="rerun_whisper"):
+                        # 기존 코드와 동일한 음성 인식 로직
+                        try:
+                            with st.spinner(f"Whisper {whisper_model} 모델 로딩 중..."):
+                                if st.session_state.speech_recognizer is None or st.session_state.speech_recognizer.model_size != whisper_model:
+                                    st.session_state.speech_recognizer = SpeechRecognizer(whisper_model)
+                                
+                                if st.session_state.speech_recognizer.model is not None:
+                                    # 진행 상황 표시
+                                    progress_bar = st.progress(0)
+                                    status_text = st.empty()
+                                    
+                                    # 전체 비디오 음성 인식
+                                    status_text.text("🎵 오디오 추출 중...")
+                                    progress_bar.progress(10)
+                                    
+                                    # 직접 전체 비디오 음성 인식 실행
+                                    status_text.text("🗣️ 음성 인식 중... (시간이 걸릴 수 있습니다)")
+                                    progress_bar.progress(30)
+                                    
+                                    result = st.session_state.speech_recognizer.transcribe_video(
+                                        st.session_state.video_editor.video_path,
+                                        language="ko"
+                                    )
+                                    
+                                    progress_bar.progress(80)
+                                    
+                                    # 전체 음성 인식 결과 저장
+                                    if result:
+                                        st.session_state.full_transcription = result
+                                    
+                                    if result and 'segments' in result:
+                                        # 인식된 텍스트를 화자 세그먼트에 매핑
+                                        recognized_segments = []
+                                        whisper_segments = result['segments']
+                                        
+                                        # 디버그 정보
+                                        st.write(f"🎯 Whisper 세그먼트 수: {len(whisper_segments)}")
+                                        st.write(f"🎯 화자 세그먼트 수: {len(sorted_segments)}")
+                                        
+                                        for seg in sorted_segments:
+                                            seg_copy = seg.copy()
+                                            seg_copy['text'] = ""
+                                            matched_texts = []
+                                            
+                                            # 해당 시간대의 텍스트 찾기 (더 유연한 매칭)
+                                            seg_start = seg['start']
+                                            seg_end = seg['end']
+                                            
+                                            for whisper_seg in whisper_segments:
+                                                w_start = whisper_seg['start']
+                                                w_end = whisper_seg['end']
+                                                
+                                                # 시간 범위가 겹치는지 확인 (더 관대한 조건)
+                                                if (w_start < seg_end and w_end > seg_start):
+                                                    # 겹치는 비율 계산
+                                                    overlap_start = max(w_start, seg_start)
+                                                    overlap_end = min(w_end, seg_end)
+                                                    overlap_duration = overlap_end - overlap_start
+                                                    
+                                                    # 20% 이상 겹치면 포함
+                                                    if overlap_duration > 0.2 * (w_end - w_start):
+                                                        matched_texts.append(whisper_seg['text'].strip())
+                                            
+                                            seg_copy['text'] = " ".join(matched_texts)
+                                            seg_copy['has_text'] = bool(seg_copy['text'])
+                                            recognized_segments.append(seg_copy)
+                                        
+                                        # 매칭 결과 확인
+                                        matched_count = sum(1 for s in recognized_segments if s['has_text'])
+                                        st.write(f"🎯 매칭된 세그먼트: {matched_count}/{len(recognized_segments)}")
+                                        
+                                        st.session_state.recognized_segments = recognized_segments
+                                        
+                                        # 인식된 텍스트 개수 확인
+                                        text_count = sum(1 for seg in recognized_segments if seg.get('text', '').strip())
+                                        progress_bar.progress(100)
+                                        st.success(f"✅ 음성 인식 완료! {text_count}/{len(recognized_segments)}개 구간에서 음성 감지")
+                                        status_text.text("")
+                                        st.rerun()
+                                    else:
+                                        st.error("❌ 음성 인식 실패: 텍스트를 추출할 수 없습니다")
+                                else:
+                                    st.error("❌ Whisper 모델 로딩 실패")
+                        except Exception as e:
+                            st.error(f"❌ 오류 발생: {str(e)}")
+                            st.info("💡 팁: 더 작은 모델(tiny)을 시도해보세요")
+            else:
+                # 음성 인식이 아직 안 된 경우 (자동 실행이 실패했거나 아직 화자 감지를 안 한 경우)
+                st.warning("⚠️ 음성 인식이 아직 실행되지 않았습니다.")
+                
+                # Whisper 모델 선택
+                col1, col2 = st.columns([1, 2])
+                with col1:
+                    whisper_model = st.selectbox(
+                        "🎙️ Whisper 모델",
+                        ["tiny", "base", "small"],
+                        index=0,
+                        help="tiny: 빠름(39MB), base: 균형(74MB), small: 정확(244MB)"
+                    )
+                
+                if st.button("🎤 음성 인식 실행", type="primary", key="run_whisper"):
+                    try:
+                        with st.spinner(f"Whisper {whisper_model} 모델 로딩 중..."):
+                            if st.session_state.speech_recognizer is None or st.session_state.speech_recognizer.model_size != whisper_model:
+                                st.session_state.speech_recognizer = SpeechRecognizer(whisper_model)
+                            
+                            if st.session_state.speech_recognizer.model is not None:
+                                # 진행 상황 표시
+                                progress_bar = st.progress(0)
+                                status_text = st.empty()
+                                
+                                # 전체 비디오 음성 인식
+                                status_text.text("🎵 오디오 추출 중...")
+                                progress_bar.progress(10)
+                                
+                                # 직접 전체 비디오 음성 인식 실행
+                                status_text.text("🗣️ 음성 인식 중... (시간이 걸릴 수 있습니다)")
+                                progress_bar.progress(30)
+                                
+                                result = st.session_state.speech_recognizer.transcribe_video(
+                                    st.session_state.video_editor.video_path,
+                                    language="ko"
+                                )
+                                
+                                progress_bar.progress(80)
+                                
+                                # 전체 음성 인식 결과 저장
+                                if result:
+                                    st.session_state.full_transcription = result
+                                
+                                if result and 'segments' in result:
+                                    # 인식된 텍스트를 화자 세그먼트에 매핑
+                                    recognized_segments = []
+                                    whisper_segments = result['segments']
+                                    
+                                    # 디버그 정보
+                                    st.write(f"🎯 Whisper 세그먼트 수: {len(whisper_segments)}")
+                                    st.write(f"🎯 화자 세그먼트 수: {len(sorted_segments)}")
+                                    
+                                    for seg in sorted_segments:
+                                        seg_copy = seg.copy()
+                                        seg_copy['text'] = ""
+                                        matched_texts = []
+                                        
+                                        # 해당 시간대의 텍스트 찾기 (더 유연한 매칭)
+                                        seg_start = seg['start']
+                                        seg_end = seg['end']
+                                        
+                                        for whisper_seg in whisper_segments:
+                                            w_start = whisper_seg['start']
+                                            w_end = whisper_seg['end']
+                                            
+                                            # 시간 범위가 겹치는지 확인 (더 관대한 조건)
+                                            if (w_start < seg_end and w_end > seg_start):
+                                                # 겹치는 비율 계산
+                                                overlap_start = max(w_start, seg_start)
+                                                overlap_end = min(w_end, seg_end)
+                                                overlap_duration = overlap_end - overlap_start
+                                                
+                                                # 20% 이상 겹치면 포함
+                                                if overlap_duration > 0.2 * (w_end - w_start):
+                                                    matched_texts.append(whisper_seg['text'].strip())
+                                        
+                                        seg_copy['text'] = " ".join(matched_texts)
+                                        seg_copy['has_text'] = bool(seg_copy['text'])
+                                        recognized_segments.append(seg_copy)
+                                    
+                                    # 매칭 결과 확인
+                                    matched_count = sum(1 for s in recognized_segments if s['has_text'])
+                                    st.write(f"🎯 매칭된 세그먼트: {matched_count}/{len(recognized_segments)}")
+                                    
+                                    st.session_state.recognized_segments = recognized_segments
+                                    
+                                    # 인식된 텍스트 개수 확인
+                                    text_count = sum(1 for seg in recognized_segments if seg.get('text', '').strip())
+                                    progress_bar.progress(100)
+                                    st.success(f"✅ 음성 인식 완료! {text_count}/{len(recognized_segments)}개 구간에서 음성 감지")
+                                    status_text.text("")
+                                    st.rerun()
+                                else:
+                                    st.error("❌ 음성 인식 실패: 텍스트를 추출할 수 없습니다")
+                            else:
+                                st.error("❌ Whisper 모델 로딩 실패")
+                    except Exception as e:
+                        st.error(f"❌ 오류 발생: {str(e)}")
+                        st.info("💡 팁: 더 작은 모델(tiny)을 시도해보세요")
+            
+            # 화자별 요약 통계 표시
+            st.markdown("---")
+            st.subheader("📊 화자별 요약 통계")
+            
+            # 화자별 통계 수집
+            speaker_stats = {}
+            for seg in sorted_segments:
+                speaker = seg['speaker']
+                if speaker not in speaker_stats:
+                    speaker_stats[speaker] = {
+                        'count': 0,
+                        'total_duration': 0,
+                        'segments': []
+                    }
+                speaker_stats[speaker]['count'] += 1
+                speaker_stats[speaker]['total_duration'] += seg['duration']
+                speaker_stats[speaker]['segments'].append(seg)
+            
+            # 화자별 통계 카드 표시
+            stats_cols = st.columns(len(speaker_stats))
+            for idx, (speaker, stats) in enumerate(speaker_stats.items()):
+                with stats_cols[idx]:
+                    speaker_emoji = {
+                        'SPEAKER_0': '🔴',
+                        'SPEAKER_1': '🔵', 
+                        'SPEAKER_2': '🟢',
+                        'SPEAKER_3': '🟡',
+                        'SPEAKER_4': '🟣',
+                        'SPEAKER_5': '🟤'
+                    }.get(speaker, '⚪')
+                    
+                    st.metric(
+                        label=f"{speaker_emoji} {speaker}",
+                        value=f"{stats['count']}회",
+                        delta=f"{format_time(stats['total_duration'])}"
+                    )
+                    
+                    # 참여율 계산
+                    if st.session_state.video_editor.video_clip:
+                        participation = (stats['total_duration'] / st.session_state.video_editor.video_clip.duration) * 100
+                        st.caption(f"참여율: {participation:.1f}%")
+            
+            # 전체 변경사항 저장 버튼
+            if st.button("🔄 전체 페이지 새로고침", type="primary"):
+                st.rerun()
             
             st.markdown("---")
             st.write("**화자별 동영상 자르기 옵션:**")
