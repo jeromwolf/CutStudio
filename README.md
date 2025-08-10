@@ -1,5 +1,7 @@
 # CutStudio - AI 기반 동영상 편집 & 분석 도구
 
+> 🚀 **빠른 시작**: `streamlit run app_refactored.py` (v3.2 권장)
+
 CutStudio는 **최신 AI 기술**을 활용한 강력한 웹 기반 동영상 편집 및 분석 도구입니다. 화자 인식, 음성 전사, AI 요약 기능으로 동영상 콘텐츠를 완전히 새로운 방식으로 분석하고 편집할 수 있습니다.
 
 ## 🆕 최신 업데이트 (v3.2) - 대규모 리팩토링 완료
@@ -9,6 +11,7 @@ CutStudio는 **최신 AI 기술**을 활용한 강력한 웹 기반 동영상 �
 - 💾 **메모리 최적화**: 청크 단위 처리로 메모리 사용량 60% 감소
 - 🚀 **처리 속도 향상**: 지연 로딩과 캐싱으로 50% 성능 향상
 - 🔧 **통합 화자 감지**: 7개 모듈을 하나로 통합 (UnifiedSpeakerDetector)
+- 📦 **Streamlit 최신 버전**: v1.48.0으로 업그레이드
 
 ### 🎯 v3.1 업데이트
 - 🤖 **듀얼 AI 요약**: Google Gemini + Claude AI 자동 전환
@@ -58,6 +61,7 @@ UnifiedSpeakerDetector가 자동으로 최적의 방법을 선택합니다:
 
 ### 🔧 시스템 요구사항
 - **Python 3.8+**
+- **Streamlit 1.48.0+** (최신 버전)
 - **FFmpeg** (필수)
 - **8GB+ RAM** (AI 기능 사용 시)
 - **인터넷 연결** (모델 다운로드용)
@@ -106,12 +110,11 @@ echo "HUGGINGFACE_TOKEN=your_huggingface_token_here" >> .env
 
 #### 6. 앱 실행
 ```bash
-# 리팩토링된 새 버전 실행 (v3.2 - 권장)
+# v3.2 리팩토링 버전 실행 (권장) ⭐
 streamlit run app_refactored.py
-
-# 기존 버전 실행
-streamlit run app.py
 ```
+
+> **참고**: 기존 버전을 사용하려면 `streamlit run app.py`를 실행하세요. 하지만 v3.2의 성능 개선을 위해 `app_refactored.py` 사용을 강력히 권장합니다.
 
 브라우저에서 http://localhost:8501 접속
 
