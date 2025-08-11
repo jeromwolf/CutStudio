@@ -60,7 +60,7 @@ UnifiedSpeakerDetector가 자동으로 최적의 방법을 선택합니다:
 ## 💻 설치 및 설정
 
 ### 🔧 시스템 요구사항
-- **Python 3.8+**
+- **Python 3.8-3.11** (3.11.9 권장, 3.12+ 호환성 이슈 가능)
 - **Streamlit 1.48.0+** (최신 버전)
 - **FFmpeg** (필수)
 - **8GB+ RAM** (AI 기능 사용 시)
@@ -118,6 +118,47 @@ echo "HUGGINGFACE_TOKEN=your_huggingface_token_here" >> .env
 # v3.2 리팩토링 버전 실행 (권장) ⭐
 streamlit run app_refactored.py
 ```
+
+### 🪟 Windows 사용자를 위한 상세 가이드
+
+#### 사전 준비사항
+1. **Python 설치**: [Anaconda](https://www.anaconda.com/download) (Python 포함) 또는 [Python 3.11.9](https://www.python.org/downloads/release/python-3119/)
+2. **개발 도구**: [Cursor AI](https://cursor.sh/) 또는 VS Code (관리자 모드로 실행 권장)
+
+#### Windows 설치 단계별 가이드
+
+1. **FFmpeg 설치 (상세)**
+   - [FFmpeg Windows 빌드](https://www.gyan.dev/ffmpeg/builds/)에서 `ffmpeg-release-essentials.zip` 다운로드
+   - 실제 파일명 예시: `ffmpeg-7.1.1-essentials_build.zip`
+   - C:\ffmpeg 폴더에 압축 해제 (C:\ffmpeg\bin\ffmpeg.exe가 존재하도록)
+   - 환경 변수 설정:
+     - 시작 메뉴 → "환경 변수 편집" 검색
+     - "환경 변수(N)..." 클릭
+     - 시스템 변수 → Path 선택 → 편집
+     - C:\ffmpeg\bin 경로 추가
+   - PowerShell/터미널 재시작 후 `ffmpeg -version`으로 확인
+
+2. **가상환경 및 패키지 설치**
+   ```powershell
+   # Cursor AI 또는 VS Code 터미널에서
+   python -m venv venv
+   venv\Scripts\activate
+   
+   # Python 버전 확인 (3.11.9 권장)
+   python --version
+   
+   # 패키지 설치
+   pip install -r requirements.txt
+   ```
+
+3. **일반적인 문제 해결**
+   - Python 관련 오류 시 Python 재설치 또는 복구 실행
+   - pip 업그레이드: `python -m pip install --upgrade pip`
+   - 특정 패키지 설치 실패 시 개별 설치 시도
+
+4. **.env 파일 설정**
+   - .env 파일에 GEMINI_API_KEY 추가 필수
+   - Windows에서는 메모장으로 .env 파일 직접 편집
 
 > **참고**: 기존 버전을 사용하려면 `streamlit run app.py`를 실행하세요. 하지만 v3.2의 성능 개선을 위해 `app_refactored.py` 사용을 강력히 권장합니다.
 
