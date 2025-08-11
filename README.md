@@ -298,7 +298,24 @@ CutStudio/
 
 ### ❌ 일반적인 오류 해결
 
-#### 1. FFmpeg 관련 오류
+#### 1. 패키지 import 오류 (No module named 'anthropic' 등)
+```bash
+# 모든 패키지 재설치
+pip install -r requirements.txt
+
+# 특정 패키지만 설치
+pip install anthropic openai-whisper torch
+
+# 가상환경 재활성화
+deactivate
+source venv/bin/activate  # Mac/Linux
+venv\Scripts\activate     # Windows
+
+# pip 업그레이드
+pip install --upgrade pip
+```
+
+#### 2. FFmpeg 관련 오류
 ```bash
 # FFmpeg 경로 문제
 export IMAGEIO_FFMPEG_EXE=/usr/local/bin/ffmpeg

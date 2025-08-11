@@ -1,5 +1,17 @@
-import whisper
-import torch
+try:
+    import whisper
+    WHISPER_AVAILABLE = True
+except ImportError:
+    WHISPER_AVAILABLE = False
+    print("Whisper 사용 불가: openai-whisper 패키지가 설치되지 않았습니다. 'pip install openai-whisper'을 실행하세요.")
+
+try:
+    import torch
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
+    print("PyTorch 사용 불가: torch 패키지가 설치되지 않았습니다. 'pip install torch'을 실행하세요.")
+
 from pathlib import Path
 import tempfile
 import subprocess
@@ -13,6 +25,11 @@ class SpeechRecognizer:
         음성 인식기 초기화
         model_size: tiny, base, small, medium, large, large-v2, large-v3
         """
+        if not WHISPER_AVAILABLE:
+            raise ImportError("openai-whisper 패키지가 설치되지 않았습니다. 'pip install openai-whisper'을 실행하세요.")
+        if not TORCH_AVAILABLE:
+            raise ImportError("torch 패키지가 설치되지 않았습니다. 'pip install torch'을 실행하세요.")
+            
         self.model_size = model_size
         self.model = None
         self.device = "cuda" if torch.cuda.is_available() else "cpu"

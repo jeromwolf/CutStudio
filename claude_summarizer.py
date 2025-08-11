@@ -1,15 +1,61 @@
 import os
-import anthropic
 from typing import List, Dict
+
+try:
+    import anthropic
+    ANTHROPIC_AVAILABLE = True
+except ImportError:
+    ANTHROPIC_AVAILABLE = False
+    print("Claude 사용 불가: anthropic 패키지가 설치되지 않았습니다. 'pip install anthropic'을 실행하세요.")
 
 class ClaudeSummarizer:
     def __init__(self):
         """Claude API 초기화"""
+        if not ANTHROPIC_AVAILABLE:
+            raise ImportError("anthropic 패키지가 설치되지 않았습니다. 'pip install anthropic'을 실행하세요.")
+        
         api_key = os.getenv("ANTHROPIC_API_KEY")
         if not api_key:
             raise ValueError("ANTHROPIC_API_KEY가 .env 파일에 설정되지 않았습니다.")
         
-        self.client = anthropic.Anthropic(api_key=api_key)
+        # 프록시 관련 환경 변수 완전 정리
+        proxy_vars = [
+            'HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy',
+            'FTP_PROXY', 'ftp_proxy', 'NO_PROXY', 'no_proxy',
+            'ALL_PROXY', 'all_proxy'
+        ]
+        
+        for var in proxy_vars:
+            os.environ.pop(var, None)
+        
+        # 여러 방법으로 시도
+        methods = [
+            # 방법 1: 기본 초기화
+            lambda: anthropic.Anthropic(api_key=api_key),
+            # 방법 2: 명시적 매개변수만 사용
+            lambda: anthropic.Anthropic(
+                api_key=api_key,
+                base_url="https://api.anthropic.com",
+                timeout=60.0
+            ),
+            # 방법 3: 최소한의 매개변수
+            lambda: anthropic.Anthropic(**{'api_key': api_key})
+        ]
+        
+        last_error = None
+        for i, method in enumerate(methods, 1):
+            try:
+                print(f"Claude 초기화 방법 {i} 시도 중...")
+                self.client = method()
+                print(f"✅ Claude 초기화 성공 (방법 {i})")
+                return
+            except Exception as e:
+                print(f"❌ 방법 {i} 실패: {e}")
+                last_error = e
+                continue
+        
+        # 모든 방법 실패
+        raise Exception(f"Claude 초기화 완전 실패. 마지막 오류: {last_error}")
     
     def summarize_text(self, text: str, max_length: int = 150) -> str:
         """텍스트 요약"""
