@@ -94,7 +94,12 @@ pip install -r requirements.txt
 
 #### 4. FFmpeg 설치 (필수)
 - **Mac**: `brew install ffmpeg`
-- **Windows**: [FFmpeg 공식 사이트](https://ffmpeg.org/download.html)
+- **Windows**: 
+  1. [여기서](https://www.gyan.dev/ffmpeg/builds/) ffmpeg-release-essentials.zip 다운로드
+  2. C:\ffmpeg에 압축 해제
+  3. 시스템 PATH에 C:\ffmpeg\bin 추가
+  4. cmd에서 `ffmpeg -version`으로 확인
+  - 자세한 가이드: [WINDOWS_FFMPEG_GUIDE.md](WINDOWS_FFMPEG_GUIDE.md)
 - **Linux**: `sudo apt-get install ffmpeg`
 
 #### 5. 환경 설정 (선택사항)
