@@ -12,6 +12,7 @@ CutStudio는 **최신 AI 기술**을 활용한 강력한 웹 기반 동영상 �
 - 🚀 **처리 속도 향상**: 지연 로딩과 캐싱으로 50% 성능 향상
 - 🔧 **통합 화자 감지**: 7개 모듈을 하나로 통합 (UnifiedSpeakerDetector)
 - 📦 **Streamlit 최신 버전**: v1.48.0으로 업그레이드
+- 📁 **대용량 파일 지원**: 최대 2GB까지 업로드 가능 (기본값 200MB에서 확장)
 
 ### 🎯 v3.1 업데이트
 - 🤖 **듀얼 AI 요약**: Google Gemini + Claude AI 자동 전환
@@ -23,6 +24,7 @@ CutStudio는 **최신 AI 기술**을 활용한 강력한 웹 기반 동영상 �
 
 ### 🎬 동영상 편집 기본 기능
 - **다양한 형식 지원**: MP4, AVI, MOV, MKV
+- **대용량 파일 지원**: 최대 2GB까지 업로드 가능
 - **YouTube 다운로드**: URL로 직접 다운로드
 - **편집 도구**: 자르기, 트림, 효과 적용
 - **실시간 미리보기**: 편집 결과 즉시 확인
@@ -296,6 +298,7 @@ CutStudio/
 ├── ⚙️ 설정 파일
 │   ├── requirements.txt                # Python 패키지 목록
 │   ├── .env.example                    # 환경변수 예제
+│   ├── .streamlit/config.toml          # Streamlit 설정 (2GB 업로드 제한)
 │   ├── .gitignore                      # Git 제외 파일
 │   └── CLAUDE.md                       # Claude AI 개발 가이드
 │
