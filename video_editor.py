@@ -649,6 +649,150 @@ class VideoEditor:
             }
         
         return profiles
+    
+    def merge_segments(self, segments, output_path):
+        """여러 세그먼트를 하나의 비디오로 병합"""
+        try:
+            if not segments:
+                print("병합할 세그먼트가 없습니다.")
+                return None
+            
+            # 세그먼트 정렬 (시간순)
+            sorted_segments = sorted(segments, key=lambda x: x['start'])
+            
+            # 각 세그먼트를 VideoClip으로 변환
+            clips = []
+            for segment in sorted_segments:
+                start_time = segment['start']
+                end_time = segment['end']
+                
+                # 비디오 클립 추출
+                if self.video_clip:
+                    clip = self.video_clip.subclip(start_time, end_time)
+                elif self.audio_clip:
+                    # 오디오만 있는 경우
+                    clip = self.audio_clip.subclip(start_time, end_time)
+                else:
+                    continue
+                
+                clips.append(clip)
+            
+            if not clips:
+                print("유효한 클립이 없습니다.")
+                return None
+            
+            # 클립들을 연결
+            final_clip = concatenate_videoclips(clips)
+            
+            # 파일로 저장
+            output_format = output_path.split('.')[-1].lower()
+            
+            if output_format == 'mp4':
+                final_clip.write_videofile(
+                    output_path,
+                    codec='libx264',
+                    audio_codec='aac',
+                    logger=None
+                )
+            else:
+                final_clip.write_videofile(output_path, logger=None)
+            
+            # 메모리 정리
+            final_clip.close()
+            for clip in clips:
+                clip.close()
+            
+            print(f"세그먼트 병합 완료: {output_path}")
+            return output_path
+            
+        except Exception as e:
+            print(f"세그먼트 병합 실패: {e}")
+            return None
+    
+    def extract_speaker_segments(self, speaker_segments, speaker_id, output_dir="processed"):
+        """특정 화자의 모든 세그먼트를 추출하여 하나의 파일로 저장"""
+        try:
+            # 특정 화자의 세그먼트만 필터링
+            speaker_specific_segments = [
+                seg for seg in speaker_segments 
+                if seg['speaker'] == speaker_id
+            ]
+            
+            if not speaker_specific_segments:
+                print(f"{speaker_id}의 세그먼트가 없습니다.")
+                return None
+            
+            # 출력 파일명 생성
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_path = f"{output_dir}/{speaker_id}_extracted_{timestamp}.mp4"
+            
+            # 세그먼트 병합
+            return self.merge_segments(speaker_specific_segments, output_path)
+            
+        except Exception as e:
+            print(f"화자 세그먼트 추출 실패: {e}")
+            return None
+    
+    def merge_overlapping_segments(self, segments, padding=0):
+        """겹치는 세그먼트들을 병합"""
+        if not segments:
+            return []
+        
+        # 시작 시간으로 정렬
+        sorted_segments = sorted(segments, key=lambda x: x['start'])
+        merged = [sorted_segments[0].copy()]
+        
+        for current in sorted_segments[1:]:
+            last_merged = merged[-1]
+            
+            # 겹치거나 연속되는 경우 병합
+            if current['start'] <= last_merged['end'] + padding:
+                last_merged['end'] = max(last_merged['end'], current['end'])
+                # 화자 정보가 있는 경우 병합
+                if 'speakers' in last_merged and 'speakers' in current:
+                    last_merged['speakers'] = list(set(
+                        last_merged.get('speakers', []) + 
+                        current.get('speakers', [])
+                    ))
+            else:
+                merged.append(current.copy())
+        
+        return merged
+    
+    def export_segments_with_context(self, segments, context_before=5, context_after=5, output_path=None):
+        """세그먼트를 전후 컨텍스트와 함께 추출"""
+        try:
+            # 컨텍스트를 포함한 새로운 세그먼트 생성
+            context_segments = []
+            for segment in segments:
+                new_segment = {
+                    'start': max(0, segment['start'] - context_before),
+                    'end': min(self.duration, segment['end'] + context_after),
+                    'original_start': segment['start'],
+                    'original_end': segment['end']
+                }
+                
+                # 추가 정보 복사
+                for key in segment:
+                    if key not in ['start', 'end']:
+                        new_segment[key] = segment[key]
+                
+                context_segments.append(new_segment)
+            
+            # 겹치는 세그먼트 병합
+            merged_segments = self.merge_overlapping_segments(context_segments)
+            
+            # 출력 경로 생성
+            if not output_path:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                output_path = f"processed/segments_with_context_{timestamp}.mp4"
+            
+            # 세그먼트 병합 및 내보내기
+            return self.merge_segments(merged_segments, output_path)
+            
+        except Exception as e:
+            print(f"컨텍스트 포함 세그먼트 추출 실패: {e}")
+            return None
 
     def __del__(self):
         """리소스 정리"""
