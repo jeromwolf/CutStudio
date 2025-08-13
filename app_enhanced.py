@@ -1146,7 +1146,7 @@ class EnhancedCutStudioApp:
             st.markdown("---")
             st.subheader("📜 다운로드 기록")
             
-            for download in st.session_state.youtube_downloads[-3:]:  # 최근 3개
+            for i, download in enumerate(st.session_state.youtube_downloads[-3:]):  # 최근 3개
                 with st.expander(f"🎬 {download['title'][:50]}..."):
                     col1, col2, col3 = st.columns(3)
                     
