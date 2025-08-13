@@ -81,7 +81,7 @@ class EnhancedCutStudioApp:
         self._display_header()
         self._display_sidebar()
         
-        # 메인 탭 - 개선된 구조
+        # 메인 탭 - 개선된 구조 (YouTube 제거)
         tabs = st.tabs([
             "📤 파일 업로드",
             "🎯 스마트 편집",  # 새로운 탭
