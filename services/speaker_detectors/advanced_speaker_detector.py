@@ -266,7 +266,7 @@ class AdvancedSpeakerDetector:
             if embeddings is None or not embeddings:
                 print("임베딩 추출 실패, 기본 방법으로 폴백")
                 # 폴백으로 기본 화자 감지 사용
-                from speaker_detector import SpeakerDetector
+                from .speaker_detector import SpeakerDetector
                 basic_detector = SpeakerDetector()
                 return basic_detector.detect_speakers(video_path, min_duration, num_speakers)
             

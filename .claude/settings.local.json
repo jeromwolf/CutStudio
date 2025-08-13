@@ -32,7 +32,8 @@
       "Bash(pip freeze)",
       "Bash(unset:*)",
       "Bash(git pull:*)",
-      "Bash(git log:*)"
+      "Bash(git log:*)",
+      "Bash(git mv:*)"
     ],
     "deny": []
   }

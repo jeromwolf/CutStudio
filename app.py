@@ -7,9 +7,9 @@ import time
 from video_editor import VideoEditor
 from utils import get_media_info, format_time, is_audio_file, is_video_file, get_media_info
 from youtube_downloader import YouTubeDownloader
-from speech_transcriber import SpeechRecognizer, AdvancedSpeechAnalyzer
+from services.speech.speech_transcriber import SpeechRecognizer, AdvancedSpeechAnalyzer
 try:
-    from gemini_summarizer import GeminiSummarizer
+    from services.summarizers.gemini_summarizer import GeminiSummarizer
     GEMINI_AVAILABLE = True
 except Exception as e:
     print(f"Gemini 사용 불가: {e}")

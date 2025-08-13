@@ -6,8 +6,8 @@ import tempfile
 from moviepy.editor import VideoFileClip, AudioFileClip
 from pydub import AudioSegment
 import numpy as np
-from speaker_detector import SpeakerDetector
-from practical_speaker_detector import PracticalSpeakerDetector
+from .speaker_detector import SpeakerDetector
+from .practical_speaker_detector import PracticalSpeakerDetector
 import streamlit as st
 
 

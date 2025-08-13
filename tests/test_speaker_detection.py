@@ -3,8 +3,10 @@
 화자 감지 테스트 스크립트
 """
 import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import time
-from practical_speaker_detector import PracticalSpeakerDetector
+from services.speaker_detectors.practical_speaker_detector import PracticalSpeakerDetector
 
 def test_speaker_detection():
     print("화자 감지 테스트 시작...")

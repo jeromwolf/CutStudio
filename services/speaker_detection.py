@@ -30,7 +30,7 @@ class UnifiedSpeakerDetector:
         """사용 가능한 화자 감지기들을 초기화합니다."""
         # 최적화된 감지기 (긴 오디오 파일용)
         try:
-            from optimized_speaker_detector import OptimizedSpeakerDetector
+            from services.speaker_detectors.optimized_speaker_detector import OptimizedSpeakerDetector
             self.detectors['optimized'] = {
                 'detector': OptimizedSpeakerDetector(base_detector='practical'),
                 'name': '최적화 감지기 (긴 파일용)',
@@ -42,7 +42,7 @@ class UnifiedSpeakerDetector:
         
         # 기본 감지기는 항상 로드
         try:
-            from speaker_detector import SpeakerDetector
+            from services.speaker_detectors.speaker_detector import SpeakerDetector
             self.detectors['balanced'] = {
                 'detector': SpeakerDetector(),
                 'name': '균형잡힌 감지기',
@@ -54,7 +54,7 @@ class UnifiedSpeakerDetector:
         
         # 실용적 감지기 (빠른 처리)
         try:
-            from practical_speaker_detector import PracticalSpeakerDetector
+            from services.speaker_detectors.practical_speaker_detector import PracticalSpeakerDetector
             self.detectors['fast'] = {
                 'detector': PracticalSpeakerDetector(),
                 'name': '빠른 감지기',
@@ -66,7 +66,7 @@ class UnifiedSpeakerDetector:
         
         # 고급 감지기 (높은 정확도)
         try:
-            from enhanced_speaker_detector import EnhancedSpeakerDetector
+            from services.speaker_detectors.enhanced_speaker_detector import EnhancedSpeakerDetector
             self.detectors['accurate'] = {
                 'detector': EnhancedSpeakerDetector(),
                 'name': '정밀 감지기',
@@ -79,7 +79,7 @@ class UnifiedSpeakerDetector:
         # HuggingFace 감지기 (최고 품질)
         if os.getenv('HUGGINGFACE_TOKEN'):
             try:
-                from huggingface_speaker_detector import HuggingFaceSpeakerDetector
+                from services.speaker_detectors.huggingface_speaker_detector import HuggingFaceSpeakerDetector
                 self.detectors['best'] = {
                     'detector': HuggingFaceSpeakerDetector(),
                     'name': 'AI 감지기 (HuggingFace)',

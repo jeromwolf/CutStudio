@@ -18,7 +18,7 @@ class SummarizationService:
         """요약기들을 초기화합니다."""
         # Gemini 초기화
         try:
-            from gemini_summarizer import GeminiSummarizer
+            from services.summarizers.gemini_summarizer import GeminiSummarizer
             self.gemini_summarizer = GeminiSummarizer()
             st.session_state.gemini_summarizer = self.gemini_summarizer
         except Exception as e:

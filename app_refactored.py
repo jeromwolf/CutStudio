@@ -569,7 +569,7 @@ class CutStudioApp:
         current_model = getattr(self, '_current_model_size', None)
         if not self.speech_processor or current_model != model_size:
             try:
-                from speech_transcriber import SpeechRecognizer
+                from services.speech.speech_transcriber import SpeechRecognizer
                 speech_recognizer = SpeechRecognizer(model_size=model_size)
                 self.speech_processor = SpeechProcessor(speech_recognizer)
                 self._current_model_size = model_size

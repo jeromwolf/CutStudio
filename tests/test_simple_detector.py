@@ -2,7 +2,11 @@
 """
 간단한 화자 감지 테스트
 """
-from speaker_detector import SpeakerDetector
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from services.speaker_detectors.speaker_detector import SpeakerDetector
 import time
 
 audio_file = "temp/(Raw)스타트업 성장 컨설팅 23년 2학기 사업계획 발표.m4a"
