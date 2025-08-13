@@ -421,9 +421,14 @@ class CutStudioApp:
         col1, col2 = st.columns(2)
         
         with col1:
+            # 균형잡힌 감지기를 기본값으로 설정
+            mode_list = list(available_modes.keys())
+            default_index = mode_list.index('balanced') if 'balanced' in mode_list else 0
+            
             detection_mode = st.selectbox(
                 "감지 모드",
-                list(available_modes.keys()),
+                mode_list,
+                index=default_index,
                 format_func=lambda x: available_modes[x]['name']
             )
             
