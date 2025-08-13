@@ -1,16 +1,25 @@
 from moviepy.editor import VideoFileClip, AudioFileClip
 import cv2
+import os
+import time
+from pathlib import Path
 
 def get_video_info(video_path):
     """동영상 정보 추출"""
     try:
         clip = VideoFileClip(video_path)
+        
+        # 파일 크기 계산
+        file_size_bytes = os.path.getsize(video_path) if os.path.exists(video_path) else 0
+        file_size_mb = file_size_bytes / (1024 * 1024)
+        
         info = {
             'duration': clip.duration,
             'fps': clip.fps,
             'width': clip.w,
             'height': clip.h,
-            'size': (clip.w, clip.h)
+            'size': (clip.w, clip.h),
+            'size_mb': file_size_mb
         }
         clip.close()
         return info
@@ -21,7 +30,8 @@ def get_video_info(video_path):
             'fps': 0,
             'width': 0,
             'height': 0,
-            'size': (0, 0)
+            'size': (0, 0),
+            'size_mb': 0
         }
 
 def format_time(seconds):
@@ -117,3 +127,84 @@ def get_media_info(media_path):
             'size': (0, 0),
             'type': 'unknown'
         }
+
+
+def get_mime_type(file_path):
+    """파일 확장자에 따른 MIME 타입 반환"""
+    ext = file_path.lower().split('.')[-1]
+    
+    mime_types = {
+        # 비디오
+        'mp4': 'video/mp4',
+        'avi': 'video/x-msvideo',
+        'mov': 'video/quicktime',
+        'mkv': 'video/x-matroska',
+        'flv': 'video/x-flv',
+        'wmv': 'video/x-ms-wmv',
+        'webm': 'video/webm',
+        
+        # 오디오
+        'mp3': 'audio/mpeg',
+        'wav': 'audio/wav',
+        'm4a': 'audio/mp4',
+        'aac': 'audio/aac',
+        'flac': 'audio/flac',
+        'ogg': 'audio/ogg',
+        'wma': 'audio/x-ms-wma',
+        
+        # 문서
+        'txt': 'text/plain',
+        'json': 'application/json',
+        'pdf': 'application/pdf'
+    }
+    
+    return mime_types.get(ext, 'application/octet-stream')
+
+
+def cleanup_old_files(directory="temp", hours=24):
+    """오래된 임시 파일 정리"""
+    try:
+        if not os.path.exists(directory):
+            return
+        
+        current_time = time.time()
+        cutoff_time = current_time - (hours * 3600)  # hours를 초로 변환
+        
+        for file_path in Path(directory).iterdir():
+            if file_path.is_file():
+                file_time = file_path.stat().st_mtime
+                if file_time < cutoff_time:
+                    try:
+                        file_path.unlink()
+                        print(f"정리된 파일: {file_path}")
+                    except Exception as e:
+                        print(f"파일 정리 실패 {file_path}: {e}")
+    
+    except Exception as e:
+        print(f"파일 정리 중 오류: {e}")
+
+
+def generate_unique_filename(base_path, prefix="", extension="mp4"):
+    """고유한 파일명 생성"""
+    from datetime import datetime
+    
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    if prefix:
+        filename = f"{prefix}_{timestamp}.{extension}"
+    else:
+        filename = f"{timestamp}.{extension}"
+    
+    full_path = Path(base_path) / filename
+    
+    # 파일이 이미 존재하면 숫자 추가
+    counter = 1
+    while full_path.exists():
+        if prefix:
+            filename = f"{prefix}_{timestamp}_{counter}.{extension}"
+        else:
+            filename = f"{timestamp}_{counter}.{extension}"
+        full_path = Path(base_path) / filename
+        counter += 1
+    
+    return str(full_path)
