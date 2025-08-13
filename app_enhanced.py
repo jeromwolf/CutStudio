@@ -1159,7 +1159,7 @@ class EnhancedCutStudioApp:
                     
                     if Path(download['path']).exists():
                         # 이 파일을 편집에 사용하기
-                        if st.button("✂️ 이 파일로 편집하기", key=f"edit_{download['path']}"):
+                        if st.button("✂️ 이 파일로 편집하기", key=f"youtube_edit_{i}"):
                             self._load_downloaded_video(download['path'])
                             st.success("✅ 파일이 로드되었습니다! 스마트 편집 탭으로 이동하세요.")
                     else:
