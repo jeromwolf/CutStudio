@@ -8,7 +8,7 @@ from moviepy.config import change_settings
 from pathlib import Path
 import tempfile
 import os
-from speaker_detector import SpeakerDetector
+from services.speaker_detectors.speaker_detector import SpeakerDetector
 import logging
 import subprocess
 from utils import is_audio_file
