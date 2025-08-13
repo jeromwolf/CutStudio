@@ -116,3 +116,7 @@ class AppState:
             if key not in keys_to_keep:
                 del st.session_state[key]
         self._initialize_session_state()
+
+
+# StateManager는 AppState의 별칭으로 설정 (호환성을 위해)
+StateManager = AppState
