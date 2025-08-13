@@ -174,7 +174,45 @@ class EnhancedCutStudioApp:
         st.header("🎯 스마트 편집")
         
         if not self.state.video_path:
-            st.info("먼저 비디오를 업로드해주세요.")
+            # 비디오가 없으면 업로드 또는 YouTube 다운로드에서 선택할 수 있도록 안내
+            st.info("편집할 비디오를 선택해주세요.")
+            
+            # YouTube 다운로드 기록이 있으면 선택 옵션 제공
+            if 'youtube_downloads' in st.session_state and st.session_state.youtube_downloads:
+                st.markdown("### 📺 YouTube 다운로드 파일에서 선택")
+                
+                # 최근 다운로드한 파일들 표시
+                recent_downloads = st.session_state.youtube_downloads[-5:]  # 최근 5개
+                
+                for i, download in enumerate(recent_downloads):
+                    col1, col2, col3 = st.columns([3, 1, 1])
+                    
+                    with col1:
+                        st.write(f"🎬 **{download['title'][:50]}...**")
+                        st.caption(f"크기: {download['size_mb']:.1f} MB | 품질: {download['quality']}")
+                    
+                    with col2:
+                        if Path(download['path']).exists():
+                            st.success("✅ 사용 가능")
+                        else:
+                            st.error("❌ 파일 없음")
+                    
+                    with col3:
+                        if Path(download['path']).exists():
+                            if st.button("📝 편집하기", key=f"edit_smart_{i}"):
+                                self._load_downloaded_video(download['path'])
+                                st.rerun()
+                
+                st.markdown("---")
+            
+            # 파일 업로드 또는 YouTube 다운로드 안내
+            st.markdown("### 💡 비디오를 편집하려면:")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.info("📤 **파일 업로드 탭**에서 비디오/오디오 파일을 업로드하세요")
+            with col2:
+                st.info("📺 **YouTube 다운로드 탭**에서 온라인 영상을 다운로드하세요")
+            
             return
         
         if not self.state.speaker_segments:
@@ -1199,7 +1237,7 @@ class EnhancedCutStudioApp:
                 # 자동으로 편집기에 로드할지 묻기
                 if st.button("🚀 바로 편집하기"):
                     self._load_downloaded_video(downloaded_path)
-                    st.experimental_rerun()
+                    st.rerun()
             
             else:
                 st.error("❌ 다운로드 실패: 파일을 찾을 수 없습니다.")
