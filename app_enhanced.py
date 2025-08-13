@@ -83,12 +83,12 @@ class EnhancedCutStudioApp:
         self._display_header()
         self._display_sidebar()
         
-        # 메인 탭 - 개선된 구조
+        # 메인 탭 - 논리적 순서로 재배치
         tabs = st.tabs([
             "📤 파일 업로드",
-            "📺 YouTube 다운로드",
-            "🎯 스마트 편집",
+            "📺 YouTube 다운로드", 
             "👥 화자 분석",
+            "🎯 스마트 편집",
             "📝 교육 요약"
         ])
         
@@ -99,13 +99,13 @@ class EnhancedCutStudioApp:
             self._handle_youtube_download()
         
         with tabs[2]:
-            self._display_smart_editing()  # 원클릭 추출 기능
+            self._display_speaker_analysis_enhanced()  # 화자 분석 먼저
         
         with tabs[3]:
-            self._display_speaker_analysis_enhanced()  # 개선된 화자 분석
+            self._display_smart_editing()  # 그 다음 스마트 편집
         
         with tabs[4]:
-            self._display_education_summary()  # 교육 특화 요약
+            self._display_education_summary()  # 마지막에 요약
     
     def _display_header(self):
         """헤더 표시"""
