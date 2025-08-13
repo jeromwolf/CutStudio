@@ -34,7 +34,7 @@ from ui.components import display_speaker_profile, display_timeline, display_sta
 # 기존 모듈
 from video_editor import VideoEditor
 from youtube_downloader import YouTubeDownloader
-from utils import format_time
+from utils import format_time, is_audio_file, is_video_file, get_media_info
 
 
 # 페이지 설정
@@ -133,11 +133,12 @@ class CutStudioApp:
     
     def _handle_file_upload(self):
         """파일 업로드 처리"""
-        st.header("📤 비디오 파일 업로드")
+        st.header("📤 미디어 파일 업로드")
         
         uploaded_file = st.file_uploader(
-            "비디오 파일을 선택하세요",
-            type=self.config.SUPPORTED_VIDEO_FORMATS
+            "비디오 또는 오디오 파일을 선택하세요",
+            type=self.config.get_all_supported_formats(),
+            help=f"지원 형식: 비디오({', '.join(self.config.SUPPORTED_VIDEO_FORMATS)}), 오디오({', '.join(self.config.SUPPORTED_AUDIO_FORMATS)})"
         )
         
         if uploaded_file is not None:
@@ -151,13 +152,13 @@ class CutStudioApp:
             
             st.success(f"✅ 파일 업로드 완료: {uploaded_file.name}")
             
-            # 비디오 에디터 초기화
+            # 미디어 에디터 초기화
             self.state.video_editor = VideoEditor()
             self.state.video_editor.load_video(str(video_path))
             self.state.video_path = str(video_path)
             
-            # 비디오 정보 표시
-            self._display_video_info()
+            # 미디어 정보 표시
+            self._display_media_info()
     
     def _handle_youtube_download(self):
         """YouTube 다운로드 처리"""
@@ -182,67 +183,96 @@ class CutStudioApp:
                             if video_path:
                                 st.success("✅ 다운로드 완료!")
                                 
-                                # 비디오 에디터 초기화
+                                # 미디어 에디터 초기화
                                 self.state.video_editor = VideoEditor()
                                 self.state.video_editor.load_video(video_path)
                                 self.state.video_path = video_path
                                 
-                                # 비디오 정보 표시
-                                self._display_video_info()
+                                # 미디어 정보 표시
+                                self._display_media_info()
                         else:
                             st.error("비디오 정보를 가져올 수 없습니다.")
                     
                     except Exception as e:
                         st.error(f"다운로드 실패: {str(e)}")
     
-    def _display_video_info(self):
-        """비디오 정보 표시"""
-        if self.state.video_editor and self.state.video_editor.video_clip:
-            video_clip = self.state.video_editor.video_clip
+    def _display_media_info(self):
+        """미디어 정보 표시"""
+        if self.state.video_editor and self.state.video_path:
+            media_info = get_media_info(self.state.video_path)
             
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                st.metric("📏 길이", format_time(video_clip.duration))
-            with col2:
-                st.metric("📐 해상도", f"{video_clip.w}x{video_clip.h}")
-            with col3:
-                st.metric("🎞️ FPS", f"{video_clip.fps:.1f}")
-            
-            # 미리보기
-            st.video(self.state.video_path)
+            if media_info['type'] == 'audio':
+                # 오디오 정보 표시
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.metric("📏 길이", format_time(media_info['duration']))
+                with col2:
+                    if media_info['audio_channels']:
+                        st.metric("🎧 채널", media_info['audio_channels'])
+                
+                # 오디오 플레이어
+                st.audio(self.state.video_path)
+            else:
+                # 비디오 정보 표시
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    st.metric("📏 길이", format_time(media_info['duration']))
+                with col2:
+                    st.metric("📐 해상도", f"{media_info['width']}x{media_info['height']}")
+                with col3:
+                    st.metric("🎞️ FPS", f"{media_info['fps']:.1f}")
+                
+                # 비디오 플레이어
+                st.video(self.state.video_path)
     
     def _display_editing_tools(self):
         """편집 도구 표시"""
         if not self.state.video_editor:
-            st.info("먼저 비디오를 업로드하거나 다운로드하세요.")
+            st.info("먼저 미디어 파일을 업로드하거나 다운로드하세요.")
             return
         
-        # 편집 도구 탭
-        edit_tabs = st.tabs([
-            "✂️ 자르기",
-            "🎨 효과",
-            "🔊 오디오",
-            "👥 화자 분석"
-        ])
+        # 미디어 타입 확인
+        media_info = get_media_info(self.state.video_path)
         
-        with edit_tabs[0]:
-            self._display_cut_tools()
-        
-        with edit_tabs[1]:
-            self._display_effects_tools()
-        
-        with edit_tabs[2]:
-            self._display_audio_tools()
-        
-        with edit_tabs[3]:
+        # 오디오 파일인 경우 화자 분석만 표시
+        if media_info['type'] == 'audio':
+            st.header("🎧 오디오 분석")
             self._display_speaker_analysis()
+        else:
+            # 비디오 파일인 경우 모든 탭 표시
+            edit_tabs = st.tabs([
+                "✂️ 자르기",
+                "🎨 효과",
+                "🔊 오디오",
+                "👥 화자 분석"
+            ])
+        
+            with edit_tabs[0]:
+                self._display_cut_tools()
+            
+            with edit_tabs[1]:
+                self._display_effects_tools()
+            
+            with edit_tabs[2]:
+                self._display_audio_tools()
+            
+            with edit_tabs[3]:
+                self._display_speaker_analysis()
     
     def _display_cut_tools(self):
         """자르기 도구 표시"""
         st.header("✂️ 비디오 자르기")
         
-        video_duration = self.state.video_editor.video_clip.duration
+        # 미디어 길이 가져오기
+        if self.state.video_editor.video_clip:
+            media_duration = self.state.video_editor.video_clip.duration
+        elif self.state.video_editor.audio_clip:
+            media_duration = self.state.video_editor.audio_clip.duration
+        else:
+            st.error("미디어 파일이 로드되지 않았습니다.")
+            return
         
         col1, col2 = st.columns(2)
         
@@ -250,7 +280,7 @@ class CutStudioApp:
             start_time = st.slider(
                 "시작 시간",
                 0.0,
-                video_duration,
+                media_duration,
                 0.0,
                 format="%.1f"
             )
@@ -259,16 +289,25 @@ class CutStudioApp:
             end_time = st.slider(
                 "종료 시간",
                 0.0,
-                video_duration,
-                video_duration,
+                media_duration,
+                media_duration,
                 format="%.1f"
             )
         
         if st.button("자르기", type="primary"):
             if start_time < end_time:
                 with st.spinner("처리 중..."):
+                    # 미디어 타입 확인
+                    media_info = get_media_info(self.state.video_path)
+                    is_audio = media_info['type'] == 'audio'
+                    
+                    # 파일 확장자 결정
+                    file_ext = '.mp3' if is_audio else '.mp4'
+                    mime_type = 'audio/mp3' if is_audio else 'video/mp4'
+                    
                     # 임시 파일명 생성
-                    output_path = Path(self.config.PROCESSED_DIR) / "trimmed_video.mp4"
+                    output_filename = f"trimmed_{'audio' if is_audio else 'video'}{file_ext}"
+                    output_path = Path(self.config.PROCESSED_DIR) / output_filename
                     output_path.parent.mkdir(exist_ok=True)
                     
                     # 자르기 실행
@@ -279,15 +318,20 @@ class CutStudioApp:
                     )
                     
                     st.success("✅ 자르기 완료!")
-                    st.video(str(output_path))
+                    
+                    # 미디어 타입에 따라 다른 플레이어 사용
+                    if is_audio:
+                        st.audio(str(output_path))
+                    else:
+                        st.video(str(output_path))
                     
                     # 다운로드 버튼
                     with open(output_path, "rb") as f:
                         st.download_button(
                             label="📥 다운로드",
                             data=f,
-                            file_name="trimmed_video.mp4",
-                            mime="video/mp4"
+                            file_name=output_filename,
+                            mime=mime_type
                         )
             else:
                 st.error("시작 시간이 종료 시간보다 앞서야 합니다.")
@@ -434,16 +478,23 @@ class CutStudioApp:
                 st.markdown("---")
                 display_timeline(
                     self.state.speaker_segments,
-                    self.state.video_editor.video_clip,
+                    self.state.video_editor.video_clip,  # 오디오 파일의 경우 None일 수 있음
                     self.state.recognized_segments,
                     self.summarizer.get_active_summarizer()
                 )
             
             # 통계
             st.markdown("---")
+            # 미디어 길이 가져오기 (비디오 또는 오디오)
+            media_duration = None
+            if self.state.video_editor.video_clip:
+                media_duration = self.state.video_editor.video_clip.duration
+            elif self.state.video_editor.audio_clip:
+                media_duration = self.state.video_editor.audio_clip.duration
+            
             display_statistics(
                 self.state.speaker_segments,
-                self.state.video_editor.video_clip.duration
+                media_duration
             )
     
     def _run_speaker_detection(self, mode: str, num_speakers: Optional[int], min_duration: float):
@@ -457,10 +508,18 @@ class CutStudioApp:
             status_text.text(message)
         
         try:
-            # 예상 시간 계산
-            video_duration = self.state.video_editor.video_clip.duration
+            # 예상 시간 계산 (비디오 또는 오디오)
+            media_duration = None
+            if self.state.video_editor.video_clip:
+                media_duration = self.state.video_editor.video_clip.duration
+            elif self.state.video_editor.audio_clip:
+                media_duration = self.state.video_editor.audio_clip.duration
+            else:
+                st.error("미디어 파일이 로드되지 않았습니다.")
+                return
+            
             min_time, max_time = self.speaker_detector.estimate_processing_time(
-                video_duration,
+                media_duration,
                 mode
             )
             

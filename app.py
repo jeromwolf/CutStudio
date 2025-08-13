@@ -5,7 +5,7 @@ from pathlib import Path
 import shutil
 import time
 from video_editor import VideoEditor
-from utils import get_video_info, format_time
+from utils import get_media_info, format_time, is_audio_file, is_video_file, get_media_info
 from youtube_downloader import YouTubeDownloader
 from speech_transcriber import SpeechRecognizer, AdvancedSpeechAnalyzer
 try:
@@ -31,6 +31,21 @@ st.set_page_config(
     page_icon="🎬",
     layout="wide"
 )
+
+# MIME 타입 헬퍼 함수
+def get_mime_type(file_path):
+    """파일 확장자에 따른 적절한 MIME 타입 반환"""
+    ext = os.path.splitext(file_path)[1].lower()
+    mime_types = {
+        '.mp4': 'video/mp4',
+        '.avi': 'video/x-msvideo',
+        '.mov': 'video/quicktime',
+        '.mkv': 'video/x-matroska',
+        '.m4a': 'audio/mp4',
+        '.mp3': 'audio/mpeg',
+        '.wav': 'audio/wav'
+    }
+    return mime_types.get(ext, 'application/octet-stream')
 
 if 'video_editor' not in st.session_state:
     st.session_state.video_editor = VideoEditor()
@@ -101,9 +116,9 @@ upload_tab, youtube_tab = st.tabs(["📁 파일 업로드", "📺 YouTube 다운
 
 with upload_tab:
     uploaded_file = st.file_uploader(
-        "동영상 파일을 업로드하세요",
-        type=['mp4', 'avi', 'mov', 'mkv'],
-        help="지원 형식: MP4, AVI, MOV, MKV"
+        "미디어 파일을 업로드하세요",
+        type=['mp4', 'avi', 'mov', 'mkv', 'm4a', 'mp3', 'wav'],
+        help="지원 형식: 비디오(MP4, AVI, MOV, MKV), 오디오(M4A, MP3, WAV)"
     )
 
 with youtube_tab:
@@ -117,10 +132,10 @@ with youtube_tab:
     if youtube_url:
         if st.button("동영상 정보 가져오기", type="primary"):
             with st.spinner("동영상 정보를 가져오는 중..."):
-                video_info = st.session_state.youtube_downloader.get_video_info(youtube_url)
+                media_info = st.session_state.youtube_downloader.get_media_info(youtube_url)
                 
-                if video_info:
-                    st.session_state.youtube_info = video_info
+                if media_info:
+                    st.session_state.youtube_info = media_info
                     st.success("동영상 정보를 가져왔습니다!")
                 else:
                     st.error("동영상 정보를 가져올 수 없습니다. URL을 확인해주세요.")
@@ -228,139 +243,164 @@ elif 'youtube_video_path' in st.session_state:
     video_loaded = True
 
 if video_loaded and temp_file_path:
+    # 미디어 정보를 먼저 가져옴
+    media_info = get_media_info(str(temp_file_path))
     
     col1, col2 = st.columns([2, 1])
     
     with col1:
-        st.subheader("원본 동영상")
-        st.video(str(temp_file_path))
+        if media_info['type'] == 'audio':
+            st.subheader("원본 오디오")
+            st.audio(str(temp_file_path))
+        else:
+            st.subheader("원본 동영상")
+            st.video(str(temp_file_path))
     
     with col2:
-        st.subheader("동영상 정보")
-        video_info = get_video_info(str(temp_file_path))
-        st.write(f"**시간:** {format_time(video_info['duration'])}")
-        st.write(f"**해상도:** {video_info['width']}x{video_info['height']}")
-        st.write(f"**FPS:** {video_info['fps']:.2f}")
+        
+        if media_info['type'] == 'audio':
+            st.subheader("오디오 정보")
+            st.write(f"**시간:** {format_time(media_info['duration'])}")
+            if media_info['audio_channels']:
+                st.write(f"**채널:** {media_info['audio_channels']}")
+            if media_info['audio_fps']:
+                st.write(f"**샘플레이트:** {media_info['audio_fps']} Hz")
+        else:
+            st.subheader("동영상 정보")
+            st.write(f"**시간:** {format_time(media_info['duration'])}")
+            st.write(f"**해상도:** {media_info['width']}x{media_info['height']}")
+            st.write(f"**FPS:** {media_info['fps']:.2f}")
     
     st.markdown("---")
     st.subheader("편집 도구")
     
-    tab1, tab2, tab3, tab4 = st.tabs(["✂️ 자르기", "🎞️ 트림", "🎨 효과", "👥 화자 구분"])
+    # 미디어 타입에 따른 탭 구성
+    if media_info['type'] == 'audio':
+        # 오디오 파일의 경우 화자 구분만 표시
+        tab4 = st.container()
+        tab1 = tab2 = tab3 = None
+    else:
+        # 비디오 파일의 경우 모든 탭 표시
+        tab1, tab2, tab3, tab4 = st.tabs(["✂️ 자르기", "🎞️ 트림", "🎨 효과", "👥 화자 구분"])
     
-    with tab1:
-        st.write("**구간 자르기**")
-        col1, col2 = st.columns(2)
-        with col1:
-            start_time = st.number_input(
-                "시작 시간 (초)",
-                min_value=0.0,
-                max_value=video_info['duration'],
-                value=0.0,
-                step=0.1
+    if tab1:
+        with tab1:
+            st.write("**구간 자르기**")
+            col1, col2 = st.columns(2)
+            with col1:
+                start_time = st.number_input(
+                    "시작 시간 (초)",
+                    min_value=0.0,
+                    max_value=media_info['duration'],
+                    value=0.0,
+                    step=0.1
+                )
+            with col2:
+                end_time = st.number_input(
+                    "종료 시간 (초)",
+                    min_value=0.0,
+                    max_value=media_info['duration'],
+                    value=media_info['duration'],
+                    step=0.1
+                )
+            
+            if st.button("자르기", type="primary"):
+                with st.spinner("동영상을 자르는 중..."):
+                    output_path = st.session_state.video_editor.cut_video(start_time, end_time)
+                    if output_path:
+                        st.success("동영상 자르기 완료!")
+                        st.video(output_path)
+                        
+                        with open(output_path, "rb") as file:
+                            st.download_button(
+                                label="편집된 동영상 다운로드",
+                                data=file,
+                                file_name=f"cut_{os.path.basename(temp_file_path)}",
+                                mime=get_mime_type(output_path)
+                            )
+    
+    if tab2:
+        with tab2:
+            st.write("**동영상 트림 (앞뒤 제거)**")
+            col1, col2 = st.columns(2)
+            with col1:
+                trim_start = st.number_input(
+                    "앞부분 제거 (초)",
+                    min_value=0.0,
+                    max_value=media_info['duration']/2,
+                    value=0.0,
+                    step=0.1
+                )
+            with col2:
+                trim_end = st.number_input(
+                    "뒷부분 제거 (초)",
+                    min_value=0.0,
+                    max_value=media_info['duration']/2,
+                    value=0.0,
+                    step=0.1
+                )
+            
+            if st.button("트림하기", type="primary", key="trim"):
+                with st.spinner("동영상을 트림하는 중..."):
+                    output_path = st.session_state.video_editor.trim_video(trim_start, trim_end)
+                    if output_path:
+                        st.success("동영상 트림 완료!")
+                        st.video(output_path)
+                        
+                        with open(output_path, "rb") as file:
+                            st.download_button(
+                                label="트림된 동영상 다운로드",
+                                data=file,
+                                file_name=f"trim_{os.path.basename(temp_file_path)}",
+                                mime=get_mime_type(output_path),
+                                key="download_trim"
+                            )
+    
+    if tab3:
+        with tab3:
+            st.write("**동영상 효과**")
+            
+            effect_type = st.selectbox(
+                "효과 선택",
+                ["없음", "흑백", "페이드 인", "페이드 아웃", "속도 변경"]
             )
-        with col2:
-            end_time = st.number_input(
-                "종료 시간 (초)",
-                min_value=0.0,
-                max_value=video_info['duration'],
-                value=video_info['duration'],
-                step=0.1
-            )
-        
-        if st.button("자르기", type="primary"):
-            with st.spinner("동영상을 자르는 중..."):
-                output_path = st.session_state.video_editor.cut_video(start_time, end_time)
-                if output_path:
-                    st.success("동영상 자르기 완료!")
-                    st.video(output_path)
+            
+            if effect_type == "속도 변경":
+                speed = st.slider(
+                    "재생 속도",
+                    min_value=0.5,
+                    max_value=2.0,
+                    value=1.0,
+                    step=0.1
+                )
+            
+            if st.button("효과 적용", type="primary", key="effect"):
+                with st.spinner("효과를 적용하는 중..."):
+                    if effect_type == "흑백":
+                        output_path = st.session_state.video_editor.apply_grayscale()
+                    elif effect_type == "페이드 인":
+                        output_path = st.session_state.video_editor.apply_fade_in()
+                    elif effect_type == "페이드 아웃":
+                        output_path = st.session_state.video_editor.apply_fade_out()
+                    elif effect_type == "속도 변경":
+                        output_path = st.session_state.video_editor.change_speed(speed)
+                    else:
+                        output_path = None
                     
-                    with open(output_path, "rb") as file:
-                        st.download_button(
-                            label="편집된 동영상 다운로드",
-                            data=file,
-                            file_name=f"cut_{os.path.basename(temp_file_path)}",
-                            mime="video/mp4"
-                        )
+                    if output_path:
+                        st.success("효과 적용 완료!")
+                        st.video(output_path)
+                        
+                        with open(output_path, "rb") as file:
+                            st.download_button(
+                                label="효과 적용된 동영상 다운로드",
+                                data=file,
+                                file_name=f"effect_{os.path.basename(temp_file_path)}",
+                                mime=get_mime_type(output_path),
+                                key="download_effect"
+                            )
     
-    with tab2:
-        st.write("**동영상 트림 (앞뒤 제거)**")
-        col1, col2 = st.columns(2)
-        with col1:
-            trim_start = st.number_input(
-                "앞부분 제거 (초)",
-                min_value=0.0,
-                max_value=video_info['duration']/2,
-                value=0.0,
-                step=0.1
-            )
-        with col2:
-            trim_end = st.number_input(
-                "뒷부분 제거 (초)",
-                min_value=0.0,
-                max_value=video_info['duration']/2,
-                value=0.0,
-                step=0.1
-            )
-        
-        if st.button("트림하기", type="primary", key="trim"):
-            with st.spinner("동영상을 트림하는 중..."):
-                output_path = st.session_state.video_editor.trim_video(trim_start, trim_end)
-                if output_path:
-                    st.success("동영상 트림 완료!")
-                    st.video(output_path)
-                    
-                    with open(output_path, "rb") as file:
-                        st.download_button(
-                            label="트림된 동영상 다운로드",
-                            data=file,
-                            file_name=f"trim_{os.path.basename(temp_file_path)}",
-                            mime="video/mp4",
-                            key="download_trim"
-                        )
-    
-    with tab3:
-        st.write("**동영상 효과**")
-        
-        effect_type = st.selectbox(
-            "효과 선택",
-            ["없음", "흑백", "페이드 인", "페이드 아웃", "속도 변경"]
-        )
-        
-        if effect_type == "속도 변경":
-            speed = st.slider(
-                "재생 속도",
-                min_value=0.5,
-                max_value=2.0,
-                value=1.0,
-                step=0.1
-            )
-        
-        if st.button("효과 적용", type="primary", key="effect"):
-            with st.spinner("효과를 적용하는 중..."):
-                if effect_type == "흑백":
-                    output_path = st.session_state.video_editor.apply_grayscale()
-                elif effect_type == "페이드 인":
-                    output_path = st.session_state.video_editor.apply_fade_in()
-                elif effect_type == "페이드 아웃":
-                    output_path = st.session_state.video_editor.apply_fade_out()
-                elif effect_type == "속도 변경":
-                    output_path = st.session_state.video_editor.change_speed(speed)
-                else:
-                    output_path = None
-                
-                if output_path:
-                    st.success("효과 적용 완료!")
-                    st.video(output_path)
-                    
-                    with open(output_path, "rb") as file:
-                        st.download_button(
-                            label="효과 적용된 동영상 다운로드",
-                            data=file,
-                            file_name=f"effect_{os.path.basename(temp_file_path)}",
-                            mime="video/mp4",
-                            key="download_effect"
-                        )
-    
+    # tab4는 항상 존재 (오디오/비디오 모두)
     with tab4:
         st.write("**화자별 구간 감지 및 자르기**")
         st.info("동영상에서 화자를 구분하여 각 화자의 발화 구간을 자동으로 감지합니다.")
@@ -447,9 +487,9 @@ if video_loaded and temp_file_path:
                 st.info(f"🎯 화자 구간을 감지하는 중... ({detection_method})")
                 
                 # 동영상 길이 확인
-                video_info = get_video_info(st.session_state.video_editor.video_path)
-                if video_info and 'duration' in video_info:
-                    duration = video_info['duration']
+                media_info = get_media_info(st.session_state.video_editor.video_path)
+                if media_info and 'duration' in media_info:
+                    duration = media_info['duration']
                     st.write(f"📹 동영상 길이: {format_time(duration)}")
                     
                     if detection_method.startswith("허깅페이스"):
@@ -1461,7 +1501,7 @@ if video_loaded and temp_file_path:
                                             label="다운로드",
                                             data=file,
                                             file_name=f"{file_info['speaker']}_{format_time(file_info['start']).replace(':', '_')}.mp4",
-                                            mime="video/mp4",
+                                            mime=get_mime_type(file_info['path']),
                                             key=f"download_{file_info['path']}"
                                         )
             
@@ -1483,7 +1523,7 @@ if video_loaded and temp_file_path:
                                     label=f"{selected_speaker} 전체 동영상 다운로드",
                                     data=file,
                                     file_name=f"{selected_speaker}_combined.mp4",
-                                    mime="video/mp4",
+                                    mime=get_mime_type(output_path),
                                     key=f"download_combined_{selected_speaker}"
                                 )
 

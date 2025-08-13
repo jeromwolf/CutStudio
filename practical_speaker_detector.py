@@ -1,6 +1,6 @@
 import os
 import tempfile
-from moviepy.editor import VideoFileClip
+from moviepy.editor import VideoFileClip, AudioFileClip
 from pydub import AudioSegment
 import numpy as np
 import torch
@@ -20,12 +20,23 @@ class PracticalSpeakerDetector:
         print(f"사용 장치: {self.device}")
         
     def extract_audio(self, video_path):
-        """비디오에서 오디오 추출"""
+        """미디어 파일에서 오디오 추출"""
         try:
-            video = VideoFileClip(video_path)
+            # 파일 확장자 확인
+            ext = video_path.lower().split('.')[-1]
             audio_path = tempfile.mktemp(suffix=".wav")
-            video.audio.write_audiofile(audio_path, verbose=False, logger=None)
-            video.close()
+            
+            if ext in ['m4a', 'mp3', 'wav', 'aac', 'flac', 'ogg', 'wma']:
+                # 오디오 파일인 경우
+                audio = AudioFileClip(video_path)
+                audio.write_audiofile(audio_path, verbose=False, logger=None)
+                audio.close()
+            else:
+                # 비디오 파일인 경우
+                video = VideoFileClip(video_path)
+                video.audio.write_audiofile(audio_path, verbose=False, logger=None)
+                video.close()
+                
             return audio_path
         except Exception as e:
             print(f"오디오 추출 실패: {e}")
@@ -317,7 +328,8 @@ class PracticalSpeakerDetector:
         
         audio_path = self.extract_audio(video_path)
         if not audio_path:
-            return None
+            print("오디오 추출 실패")
+            return []
         
         try:
             # 1. 음성 구간 검출
@@ -391,6 +403,9 @@ class PracticalSpeakerDetector:
             import traceback
             traceback.print_exc()
             
-            if os.path.exists(audio_path):
+            # 임시 파일 정리
+            if audio_path and os.path.exists(audio_path):
                 os.remove(audio_path)
-            return None
+            
+            # 빈 리스트 반환 (None 대신)
+            return []

@@ -1,4 +1,4 @@
-from moviepy.editor import VideoFileClip, concatenate_videoclips, vfx
+from moviepy.editor import VideoFileClip, AudioFileClip, concatenate_videoclips, vfx
 import cv2
 import numpy as np
 from PIL import Image
@@ -11,6 +11,7 @@ import os
 from speaker_detector import SpeakerDetector
 import logging
 import subprocess
+from utils import is_audio_file
 
 # MoviePy 로깅 비활성화
 logging.getLogger('moviepy').setLevel(logging.ERROR)
@@ -55,6 +56,8 @@ except ImportError:
 class VideoEditor:
     def __init__(self):
         self.video_clip = None
+        self.audio_clip = None  # 오디오 전용 클립
+        self.media_type = None  # 'video' 또는 'audio'
         self.output_dir = Path("processed")
         self.output_dir.mkdir(exist_ok=True)
         self.temp_counter = 0
@@ -66,56 +69,79 @@ class VideoEditor:
         self.video_path = None
     
     def load_video(self, video_path):
-        """동영상 파일 로드"""
+        """미디어 파일 로드 (비디오/오디오 모두 지원)"""
         try:
-            self.video_clip = VideoFileClip(video_path)
+            if is_audio_file(video_path):
+                # 오디오 파일 로드
+                self.audio_clip = AudioFileClip(video_path)
+                self.video_clip = None
+                self.media_type = 'audio'
+            else:
+                # 비디오 파일 로드
+                self.video_clip = VideoFileClip(video_path)
+                self.audio_clip = None
+                self.media_type = 'video'
+            
             self.video_path = video_path
             return True
         except Exception as e:
-            print(f"동영상 로드 실패: {e}")
+            print(f"미디어 로드 실패: {e}")
             return False
     
     def get_output_path(self, prefix="output"):
         """출력 파일 경로 생성"""
         self.temp_counter += 1
-        return str(self.output_dir / f"{prefix}_{self.temp_counter}.mp4")
+        ext = 'm4a' if self.media_type == 'audio' else 'mp4'
+        return str(self.output_dir / f"{prefix}_{self.temp_counter}.{ext}")
     
     def cut_video(self, start_time, end_time):
-        """동영상 자르기"""
-        if self.video_clip is None:
+        """미디어 자르기 (비디오/오디오 모두 지원)"""
+        if self.video_clip is None and self.audio_clip is None:
             return None
         
         try:
-            cut_clip = self.video_clip.subclip(start_time, end_time)
-            output_path = self.get_output_path("cut")
-            
-            # 비디오 쓰기 설정
-            if cut_clip.audio is not None:
-                cut_clip.write_videofile(
-                    output_path, 
-                    codec='libx264', 
-                    audio_codec='aac',
-                    temp_audiofile='temp-audio.m4a',
-                    remove_temp=True,
-                    fps=self.video_clip.fps,
-                    preset='medium',
-                    threads=4,
+            if self.media_type == 'audio':
+                # 오디오 파일 자르기
+                cut_clip = self.audio_clip.subclip(start_time, end_time)
+                output_path = self.get_output_path("cut")
+                
+                cut_clip.write_audiofile(
+                    output_path,
+                    codec='aac',
                     logger=None
                 )
             else:
-                cut_clip.write_videofile(
-                    output_path, 
-                    codec='libx264',
-                    fps=self.video_clip.fps,
-                    preset='medium',
-                    threads=4,
-                    logger=None
-                )
+                # 비디오 파일 자르기
+                cut_clip = self.video_clip.subclip(start_time, end_time)
+                output_path = self.get_output_path("cut")
+                
+                # 비디오 쓰기 설정
+                if cut_clip.audio is not None:
+                    cut_clip.write_videofile(
+                        output_path, 
+                        codec='libx264', 
+                        audio_codec='aac',
+                        temp_audiofile='temp-audio.m4a',
+                        remove_temp=True,
+                        fps=self.video_clip.fps,
+                        preset='medium',
+                        threads=4,
+                        logger=None
+                    )
+                else:
+                    cut_clip.write_videofile(
+                        output_path, 
+                        codec='libx264',
+                        fps=self.video_clip.fps,
+                        preset='medium',
+                        threads=4,
+                        logger=None
+                    )
             
             cut_clip.close()
             return output_path
         except Exception as e:
-            print(f"동영상 자르기 실패: {e}")
+            print(f"미디어 자르기 실패: {e}")
             import traceback
             traceback.print_exc()
             return None
@@ -474,7 +500,11 @@ class VideoEditor:
     
     def generate_speaker_thumbnails(self, speaker_segments, thumbnail_size=(150, 100)):
         """화자별 썸네일 생성"""
-        if self.video_clip is None or not speaker_segments:
+        if not speaker_segments:
+            return {}
+        
+        # 오디오 파일인 경우 빈 딕셔너리 반환
+        if self.video_clip is None:
             return {}
         
         thumbnails = {}
@@ -581,11 +611,16 @@ class VideoEditor:
                     'participation_rate': 0  # 전체 비디오 대비 비율, 나중에 계산
                 }
             
-            # 전체 비디오 길이 대비 참여율 계산
+            # 전체 미디어 길이 대비 참여율 계산
+            total_duration = None
             if self.video_clip:
-                total_video_duration = self.video_clip.duration
+                total_duration = self.video_clip.duration
+            elif self.audio_clip:
+                total_duration = self.audio_clip.duration
+            
+            if total_duration:
                 for speaker_id in summary:
-                    participation_rate = (summary[speaker_id]['total_duration'] / total_video_duration) * 100
+                    participation_rate = (summary[speaker_id]['total_duration'] / total_duration) * 100
                     summary[speaker_id]['participation_rate'] = round(participation_rate, 1)
             
             return summary

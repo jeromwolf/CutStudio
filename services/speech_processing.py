@@ -56,10 +56,22 @@ class SpeechProcessor:
                 
                 # 세그먼트의 오디오 추출 (video_editor 필요)
                 if hasattr(st.session_state, 'video_editor') and st.session_state.video_editor:
-                    audio_clip = st.session_state.video_editor.video_clip.subclip(
-                        segment['start'], 
-                        segment['end']
-                    ).audio
+                    video_editor = st.session_state.video_editor
+                    
+                    # 비디오 파일인 경우
+                    if video_editor.video_clip:
+                        audio_clip = video_editor.video_clip.subclip(
+                            segment['start'], 
+                            segment['end']
+                        ).audio
+                    # 오디오 파일인 경우
+                    elif video_editor.audio_clip:
+                        audio_clip = video_editor.audio_clip.subclip(
+                            segment['start'], 
+                            segment['end']
+                        )
+                    else:
+                        audio_clip = None
                     
                     if audio_clip:
                         audio_clip.write_audiofile(audio_path, logger=None)

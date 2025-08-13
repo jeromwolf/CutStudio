@@ -100,3 +100,8 @@ class AppConfig:
         elif file_type == "audio":
             return ext in AppConfig.SUPPORTED_AUDIO_FORMATS
         return False
+    
+    @staticmethod
+    def get_all_supported_formats() -> List[str]:
+        """모든 지원 형식 반환 (비디오 + 오디오)"""
+        return AppConfig.SUPPORTED_VIDEO_FORMATS + AppConfig.SUPPORTED_AUDIO_FORMATS

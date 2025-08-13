@@ -54,9 +54,10 @@ class GeminiSummarizer:
             # API 할당량 초과 또는 기타 오류 시 간단한 요약 반환
             return self._simple_summary(text, max_length)
     
-    def summarize_conversation(self, segments: List[Dict]) -> Dict[str, str]:
-        """화자별 대화 내용 요약 (화자 중심 분석)"""
+    def summarize_conversation(self, segments: List[Dict]) -> Dict:
+        """종합 대화 분석 - 전체 요약, 화자별 요약, 키워드를 모두 반환"""
         speaker_texts = {}
+        all_texts = []
         
         # 화자별로 텍스트 수집
         for seg in segments:
@@ -67,8 +68,31 @@ class GeminiSummarizer:
                 if speaker not in speaker_texts:
                     speaker_texts[speaker] = []
                 speaker_texts[speaker].append(text)
+                all_texts.append(f"{speaker}: {text}")
         
-        # 화자별 요약 생성
+        # 1. 전체 대화 요약 생성
+        overall_summary = ""
+        if all_texts:
+            try:
+                conversation_text = '\n'.join(all_texts)
+                prompt = f"""
+                다음은 {len(speaker_texts)}명이 참여한 대화 내용입니다.
+                이 대화의 전체적인 내용을 3-4문장으로 간단히 요약해주세요.
+                
+                대화 내용:
+                {conversation_text}
+                
+                전체 요약:
+                """
+                
+                response = self.model.generate_content(prompt)
+                overall_summary = response.text.strip()
+                
+            except Exception as e:
+                print(f"전체 요약 실패: {e}")
+                overall_summary = f"총 {len(speaker_texts)}명이 참여한 대화 (요약 생성 실패)"
+        
+        # 2. 화자별 요약 생성
         speaker_summaries = {}
         for speaker, texts in speaker_texts.items():
             combined_text = ' '.join(texts)
@@ -77,7 +101,6 @@ class GeminiSummarizer:
                     prompt = f"""
                     다음은 {speaker}이(가) 말한 내용들입니다. 
                     이 화자의 주요 발언 내용을 2-3문장으로 간단히 요약해주세요.
-                    각 화자의 개별 발언에 집중하여 요약하세요.
                     
                     발화 내용: {combined_text}
                     
@@ -111,7 +134,17 @@ class GeminiSummarizer:
             else:
                 speaker_summaries[speaker] = "발화 내용이 너무 짧습니다"
         
-        return speaker_summaries
+        # 3. 키워드 추출
+        keywords = []
+        if all_texts:
+            full_text = ' '.join([text.split(': ', 1)[1] if ': ' in text else text for text in all_texts])
+            keywords = self.extract_keywords(full_text, 5)
+        
+        return {
+            'overall_summary': overall_summary,
+            'speaker_summaries': speaker_summaries,
+            'keywords': keywords
+        }
     
     def generate_meeting_summary(self, segments: List[Dict]) -> str:
         """전체 대화/회의 요약"""

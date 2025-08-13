@@ -25,13 +25,17 @@ def generate_thumbnail(video_clip, timestamp: float, size: tuple = (200, 150)) -
     비디오에서 썸네일을 생성합니다.
     
     Args:
-        video_clip: MoviePy VideoFileClip 객체
+        video_clip: MoviePy VideoFileClip 객체 (오디오 파일의 경우 None)
         timestamp: 썸네일을 생성할 시간 (초)
         size: 썸네일 크기 (width, height)
         
     Returns:
         Base64 인코딩된 이미지 문자열 또는 None
     """
+    # 비디오 클립이 없으면 (오디오 파일인 경우) None 반환
+    if not video_clip:
+        return None
+        
     try:
         frame = video_clip.get_frame(timestamp)
         pil_image = Image.fromarray(frame)
@@ -59,19 +63,23 @@ def display_timeline_card(
     
     Args:
         segment: 세그먼트 정보
-        video_clip: MoviePy VideoFileClip 객체
+        video_clip: MoviePy VideoFileClip 객체 (오디오 파일의 경우 None)
         recognized_text: 음성 인식된 텍스트
         summarizer: 요약기 객체 (Gemini/Claude)
         show_summary: 요약 표시 여부
     """
-    # 썸네일 생성 및 표시
-    mid_time = (segment['start'] + segment['end']) / 2
-    thumbnail_base64 = generate_thumbnail(video_clip, mid_time) if video_clip else None
-    
-    if thumbnail_base64:
-        st.image(f"data:image/jpeg;base64,{thumbnail_base64}", use_container_width=True)
+    # 썸네일 생성 및 표시 (비디오인 경우만)
+    if video_clip:
+        mid_time = (segment['start'] + segment['end']) / 2
+        thumbnail_base64 = generate_thumbnail(video_clip, mid_time)
+        
+        if thumbnail_base64:
+            st.image(f"data:image/jpeg;base64,{thumbnail_base64}", use_container_width=True)
+        else:
+            st.image("https://via.placeholder.com/200x150?text=No+Thumbnail", use_container_width=True)
     else:
-        st.image("https://via.placeholder.com/200x150?text=No+Thumbnail", use_container_width=True)
+        # 오디오 파일의 경우 오디오 아이콘 표시
+        st.image("https://via.placeholder.com/200x150?text=🎵+Audio+File", use_container_width=True)
     
     # 화자 정보
     speaker_emoji = SPEAKER_COLORS.get(segment['speaker'], '⚪')
@@ -116,7 +124,7 @@ def display_timeline(
     
     Args:
         segments: 화자 세그먼트 리스트
-        video_clip: MoviePy VideoFileClip 객체
+        video_clip: MoviePy VideoFileClip 객체 (오디오 파일의 경우 None)
         recognized_segments: 음성 인식된 세그먼트 리스트
         summarizer: 요약기 객체
         cols_per_row: 한 행에 표시할 카드 수

@@ -25,7 +25,14 @@
       "Bash(pkill:*)",
       "Bash(sed:*)",
       "Bash(rg:*)",
-      "Bash(touch:*)"
+      "Bash(touch:*)",
+      "Bash(git fetch:*)",
+      "Bash(git checkout:*)",
+      "Bash(pip show:*)",
+      "Bash(pip freeze)",
+      "Bash(unset:*)",
+      "Bash(git pull:*)",
+      "Bash(git log:*)"
     ],
     "deny": []
   }

@@ -1,6 +1,9 @@
 """
 통합 화자 감지 서비스
 """
+import os
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import streamlit as st
 from typing import List, Dict, Any, Optional, Tuple
 import os
@@ -25,6 +28,18 @@ class UnifiedSpeakerDetector:
     
     def _initialize_detectors(self):
         """사용 가능한 화자 감지기들을 초기화합니다."""
+        # 최적화된 감지기 (긴 오디오 파일용)
+        try:
+            from optimized_speaker_detector import OptimizedSpeakerDetector
+            self.detectors['optimized'] = {
+                'detector': OptimizedSpeakerDetector(base_detector='practical'),
+                'name': '최적화 감지기 (긴 파일용)',
+                'description': '긴 오디오 파일에 최적화',
+                'estimated_time_factor': 0.2
+            }
+        except Exception as e:
+            print(f"최적화 감지기 로드 실패: {e}")
+        
         # 기본 감지기는 항상 로드
         try:
             from speaker_detector import SpeakerDetector
@@ -196,14 +211,23 @@ class UnifiedSpeakerDetector:
             선택된 모드
         """
         try:
-            from moviepy.editor import VideoFileClip
+            from moviepy.editor import VideoFileClip, AudioFileClip
+            from utils import is_audio_file
             
-            # 비디오 길이 확인
-            with VideoFileClip(video_path) as video:
-                duration_minutes = video.duration / 60
+            # 미디어 길이 확인
+            if is_audio_file(video_path):
+                with AudioFileClip(video_path) as audio:
+                    duration_minutes = audio.duration / 60
+            else:
+                with VideoFileClip(video_path) as video:
+                    duration_minutes = video.duration / 60
             
             # 길이에 따른 모드 선택
-            if duration_minutes < 5:
+            if duration_minutes > 30:
+                # 매우 긴 파일: 최적화 감지기
+                if 'optimized' in self.detectors:
+                    return 'optimized'
+            elif duration_minutes < 5:
                 # 짧은 영상: 정확도 우선
                 if 'best' in self.detectors:
                     return 'best'
