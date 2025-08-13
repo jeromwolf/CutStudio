@@ -1159,43 +1159,50 @@ class EnhancedCutStudioApp:
             status_text.text("⬇️ 다운로드 시작...")
             progress_bar.progress(0.2)
             
-            # YouTube 다운로드 실행
-            result = self.youtube_downloader.download_video(
+            # YouTube 다운로드 실행 (기존 메서드 시그니처에 맞춤)
+            def youtube_progress_callback(percent, downloaded, total):
+                progress = 0.2 + (percent / 100) * 0.7
+                progress_bar.progress(progress)
+                status_text.text(f"⬇️ 다운로드 중... {percent:.1f}%")
+            
+            downloaded_path = self.youtube_downloader.download_video(
                 url=url,
-                output_dir=self.config.DOWNLOADS_DIR,
-                progress_callback=progress_callback,
-                **download_options
+                format_id=None,  # 기본 최고 품질
+                progress_callback=youtube_progress_callback
             )
             
-            if result and result.get('success'):
+            if downloaded_path and os.path.exists(downloaded_path):
                 progress_bar.progress(1.0)
                 status_text.text("✅ 다운로드 완료!")
+                
+                # 파일 정보 가져오기
+                file_size_mb = os.path.getsize(downloaded_path) / (1024 * 1024)
+                filename = Path(downloaded_path).stem
                 
                 # 다운로드 기록 저장
                 if 'youtube_downloads' not in st.session_state:
                     st.session_state.youtube_downloads = []
                 
                 st.session_state.youtube_downloads.append({
-                    'title': result.get('title', 'Unknown'),
-                    'path': result.get('filepath', ''),
+                    'title': filename,
+                    'path': downloaded_path,
                     'quality': quality,
                     'format': format_type,
-                    'size_mb': result.get('size_mb', 0),
-                    'duration': result.get('duration', ''),
+                    'size_mb': file_size_mb,
+                    'duration': 'Unknown',
                     'download_time': datetime.now(),
                     'url': url
                 })
                 
-                st.success(f"✅ 다운로드 완료: {result.get('title', 'Unknown')}")
+                st.success(f"✅ 다운로드 완료: {filename}")
                 
                 # 자동으로 편집기에 로드할지 묻기
                 if st.button("🚀 바로 편집하기"):
-                    self._load_downloaded_video(result['filepath'])
+                    self._load_downloaded_video(downloaded_path)
                     st.experimental_rerun()
             
             else:
-                error_msg = result.get('error', '알 수 없는 오류') if result else '다운로드 실패'
-                st.error(f"❌ 다운로드 실패: {error_msg}")
+                st.error("❌ 다운로드 실패: 파일을 찾을 수 없습니다.")
         
         except Exception as e:
             st.error(f"❌ 다운로드 중 오류 발생: {str(e)}")
