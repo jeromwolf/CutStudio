@@ -24,6 +24,7 @@ from utils import (
     get_video_info, format_time, get_mime_type,
     cleanup_old_files, generate_unique_filename
 )
+from youtube_downloader import YouTubeDownloader
 
 # UI 컴포넌트
 from ui.components.speaker_profile import display_speaker_profile
@@ -47,6 +48,7 @@ class EnhancedCutStudioApp:
         self.speaker_detector = UnifiedSpeakerDetector()
         self.speech_processor = SpeechProcessor()
         self.summarizer = SummarizationService()
+        self.youtube_downloader = YouTubeDownloader()
         
         # 세션 상태 초기화
         self._initialize_session_state()
@@ -81,24 +83,28 @@ class EnhancedCutStudioApp:
         self._display_header()
         self._display_sidebar()
         
-        # 메인 탭 - 개선된 구조 (YouTube 제거)
+        # 메인 탭 - 개선된 구조
         tabs = st.tabs([
             "📤 파일 업로드",
-            "🎯 스마트 편집",  # 새로운 탭
+            "📺 YouTube 다운로드",
+            "🎯 스마트 편집",
             "👥 화자 분석",
-            "📝 교육 요약"     # 새로운 탭
+            "📝 교육 요약"
         ])
         
         with tabs[0]:
             self._handle_file_upload()
         
         with tabs[1]:
-            self._display_smart_editing()  # 원클릭 추출 기능
+            self._handle_youtube_download()
         
         with tabs[2]:
-            self._display_speaker_analysis_enhanced()  # 개선된 화자 분석
+            self._display_smart_editing()  # 원클릭 추출 기능
         
         with tabs[3]:
+            self._display_speaker_analysis_enhanced()  # 개선된 화자 분석
+        
+        with tabs[4]:
             self._display_education_summary()  # 교육 특화 요약
     
     def _display_header(self):
@@ -1015,6 +1021,202 @@ class EnhancedCutStudioApp:
             
             # 미디어 정보 표시
             self._display_media_info()
+    
+    def _handle_youtube_download(self):
+        """YouTube 다운로드 처리"""
+        st.header("📺 YouTube 동영상 다운로드")
+        
+        # YouTube URL 입력
+        youtube_url = st.text_input(
+            "YouTube URL을 입력하세요",
+            placeholder="https://www.youtube.com/watch?v=...",
+            help="YouTube 동영상 또는 재생목록 URL을 입력하세요"
+        )
+        
+        if youtube_url:
+            # URL 유효성 간단 체크
+            if "youtube.com" in youtube_url or "youtu.be" in youtube_url:
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    download_quality = st.selectbox(
+                        "다운로드 품질",
+                        ["highest", "720p", "480p", "360p", "audio_only"],
+                        format_func=lambda x: {
+                            "highest": "최고 화질",
+                            "720p": "720p (HD)",
+                            "480p": "480p (SD)", 
+                            "360p": "360p (저화질)",
+                            "audio_only": "오디오만"
+                        }[x]
+                    )
+                
+                with col2:
+                    download_format = st.selectbox(
+                        "파일 형식",
+                        ["mp4", "webm", "mp3"] if download_quality != "audio_only" else ["mp3", "m4a", "wav"],
+                        format_func=lambda x: {
+                            "mp4": "MP4 (추천)",
+                            "webm": "WebM",
+                            "mp3": "MP3 (오디오)",
+                            "m4a": "M4A (오디오)",
+                            "wav": "WAV (오디오)"
+                        }[x]
+                    )
+                
+                # 고급 옵션
+                with st.expander("🔧 고급 옵션"):
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        start_time = st.text_input(
+                            "시작 시간 (선택사항)",
+                            placeholder="00:10:30",
+                            help="형식: HH:MM:SS 또는 MM:SS"
+                        )
+                    
+                    with col2:
+                        end_time = st.text_input(
+                            "종료 시간 (선택사항)",
+                            placeholder="01:20:15",
+                            help="형식: HH:MM:SS 또는 MM:SS"
+                        )
+                    
+                    subtitle_download = st.checkbox(
+                        "자막 다운로드",
+                        value=False,
+                        help="사용 가능한 자막을 함께 다운로드합니다"
+                    )
+                
+                # 다운로드 버튼
+                if st.button("📥 다운로드 시작", type="primary", use_container_width=True):
+                    self._download_youtube_video(
+                        youtube_url,
+                        download_quality,
+                        download_format,
+                        start_time,
+                        end_time,
+                        subtitle_download
+                    )
+            
+            else:
+                st.error("❌ 유효한 YouTube URL을 입력해주세요.")
+        
+        # 다운로드 히스토리
+        if 'youtube_downloads' in st.session_state and st.session_state.youtube_downloads:
+            st.markdown("---")
+            st.subheader("📜 다운로드 기록")
+            
+            for download in st.session_state.youtube_downloads[-3:]:  # 최근 3개
+                with st.expander(f"🎬 {download['title'][:50]}..."):
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        st.metric("품질", download['quality'])
+                    with col2:
+                        st.metric("크기", f"{download['size_mb']:.1f} MB")
+                    with col3:
+                        st.metric("시간", download['duration'])
+                    
+                    if Path(download['path']).exists():
+                        # 이 파일을 편집에 사용하기
+                        if st.button("✂️ 이 파일로 편집하기", key=f"edit_{download['path']}"):
+                            self._load_downloaded_video(download['path'])
+                            st.success("✅ 파일이 로드되었습니다! 스마트 편집 탭으로 이동하세요.")
+                    else:
+                        st.warning("⚠️ 파일이 삭제되었습니다.")
+    
+    def _download_youtube_video(self, url, quality, format_type, start_time, end_time, include_subtitle):
+        """YouTube 동영상 다운로드 실행"""
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
+        try:
+            status_text.text("📡 동영상 정보를 가져오는 중...")
+            progress_bar.progress(0.1)
+            
+            # 다운로드 옵션 설정
+            download_options = {
+                'quality': quality,
+                'format': format_type,
+                'include_subtitle': include_subtitle
+            }
+            
+            # 시간 구간 설정
+            if start_time:
+                download_options['start_time'] = start_time
+            if end_time:
+                download_options['end_time'] = end_time
+            
+            # 진행률 콜백
+            def progress_callback(current, total, message="다운로드 중..."):
+                if total > 0:
+                    progress = 0.1 + (current / total) * 0.9
+                    progress_bar.progress(progress)
+                    status_text.text(f"{message} ({current}/{total})")
+            
+            status_text.text("⬇️ 다운로드 시작...")
+            progress_bar.progress(0.2)
+            
+            # YouTube 다운로드 실행
+            result = self.youtube_downloader.download_video(
+                url=url,
+                output_dir=self.config.DOWNLOADS_DIR,
+                progress_callback=progress_callback,
+                **download_options
+            )
+            
+            if result and result.get('success'):
+                progress_bar.progress(1.0)
+                status_text.text("✅ 다운로드 완료!")
+                
+                # 다운로드 기록 저장
+                if 'youtube_downloads' not in st.session_state:
+                    st.session_state.youtube_downloads = []
+                
+                st.session_state.youtube_downloads.append({
+                    'title': result.get('title', 'Unknown'),
+                    'path': result.get('filepath', ''),
+                    'quality': quality,
+                    'format': format_type,
+                    'size_mb': result.get('size_mb', 0),
+                    'duration': result.get('duration', ''),
+                    'download_time': datetime.now(),
+                    'url': url
+                })
+                
+                st.success(f"✅ 다운로드 완료: {result.get('title', 'Unknown')}")
+                
+                # 자동으로 편집기에 로드할지 묻기
+                if st.button("🚀 바로 편집하기"):
+                    self._load_downloaded_video(result['filepath'])
+                    st.experimental_rerun()
+            
+            else:
+                error_msg = result.get('error', '알 수 없는 오류') if result else '다운로드 실패'
+                st.error(f"❌ 다운로드 실패: {error_msg}")
+        
+        except Exception as e:
+            st.error(f"❌ 다운로드 중 오류 발생: {str(e)}")
+        
+        finally:
+            progress_bar.empty()
+            status_text.empty()
+    
+    def _load_downloaded_video(self, file_path):
+        """다운로드된 비디오를 편집기에 로드"""
+        try:
+            # VideoEditor 초기화
+            self.state.video_editor = VideoEditor()
+            self.state.video_editor.load_video(file_path)
+            self.state.video_path = file_path
+            
+            # 세션 상태 업데이트
+            st.session_state.video_path = file_path
+            
+        except Exception as e:
+            st.error(f"파일 로드 실패: {str(e)}")
     
     def _display_media_info(self):
         """미디어 정보 표시"""
