@@ -1,3 +1,0 @@
-"""
-CutStudio UI Module
-"""

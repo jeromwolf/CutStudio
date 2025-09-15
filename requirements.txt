@@ -1,35 +1,71 @@
-streamlit==1.48.0
+# CutStudio v5.0 - Production Requirements
+# Python 3.12 권장 (Python 3.10-3.12 지원)
+# ⚠️ Python 3.13은 호환성 문제로 지원 안 됨
+# 마지막 테스트: 2025-09-14
+
+# =================================
+# 핵심 패키지 (필수)
+# =================================
+
+# Web Framework
+streamlit==1.38.0
+
+# Video Processing
 moviepy==1.0.3
-opencv-python==4.9.0.80
-numpy<2.0.0
-Pillow==10.3.0
+imageio==2.31.1
+imageio-ffmpeg==0.4.9
+ffmpeg-python==0.2.0
+
+# Audio Processing
 pydub==0.25.1
-speechrecognition==3.10.4
-pyannote.audio==3.1.1
-torch>=2.0.0
-torchaudio>=2.0.0
-yt-dlp>=2024.1.0
-webrtcvad==2.0.10
-librosa==0.10.1
-scikit-learn>=1.3.0
-scipy>=1.11.0
-speechbrain>=0.5.16
-transformers>=4.36.0
-hdbscan>=0.8.33
-python-dotenv>=1.0.0
-openai-whisper>=20231117
-google-generativeai>=0.3.0
-anthropic>=0.62.0
-# 추가 의존성
-pyaudio>=0.2.11
-ffmpeg-python>=0.2.0
-soundfile>=0.12.1
-matplotlib>=3.7.0
-seaborn>=0.12.0
-pandas>=2.0.0
-requests>=2.31.0
-urllib3>=2.0.0
-certifi>=2023.0.0
-# 옵션: GPU 가속 (CUDA 11.8 기준)
-# torch==2.0.1+cu118
-# torchaudio==2.0.2+cu118
+librosa==0.10.2
+soundfile==0.12.1
+
+# Data Processing
+pandas==2.2.0
+numpy==1.26.4
+scipy>=1.11.4
+
+# YouTube Download
+yt-dlp>=2024.8.6
+
+# Utilities
+python-dotenv==1.0.0
+tqdm>=4.66.0
+pillow>=10.0.0
+watchdog>=4.0.0  # Streamlit 성능 향상
+
+# =================================
+# AI 기능 (권장 - 없어도 기본 작동)
+# =================================
+
+# Speech Recognition & Transcription
+openai-whisper==20250625
+
+# Google AI (for summarization)
+google-generativeai==0.8.3
+
+# =================================
+# 고급 기능 (선택사항)
+# =================================
+
+# PyTorch (Speaker detection 고급 기능용)
+# 주의: 설치가 오래 걸림
+# torch==2.1.2
+# torchaudio==2.1.2
+
+# Speaker Diarization (고급 화자 감지)
+# pyannote.audio==3.3.2
+# speechbrain==1.0.0
+
+# =================================
+# 설치 방법
+# =================================
+# 1. 기본 설치 (빠름):
+#    pip install -r requirements.txt
+#
+# 2. 전체 기능 설치:
+#    주석 처리된 패키지들도 설치
+#
+# 3. 최소 설치:
+#    requirements_minimal.txt 사용

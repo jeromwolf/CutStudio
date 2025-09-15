@@ -65,9 +65,16 @@ class SpeakerDetector:
     def extract_audio(self, video_path):
         """미디어 파일에서 오디오 추출"""
         try:
+            # 파일 존재 확인
+            if not os.path.exists(video_path):
+                print(f"File not found: {video_path}")
+                return None
+                
             # 파일 확장자 확인
             ext = video_path.lower().split('.')[-1]
             audio_path = tempfile.mktemp(suffix=".wav")
+            
+            print(f"Extracting audio from {video_path} (format: {ext})")
             
             if ext in ['m4a', 'mp3', 'wav', 'aac', 'flac', 'ogg', 'wma']:
                 # 오디오 파일인 경우
@@ -77,12 +84,19 @@ class SpeakerDetector:
             else:
                 # 비디오 파일인 경우
                 video = VideoFileClip(video_path)
+                if video.audio is None:
+                    print(f"No audio track found in video: {video_path}")
+                    video.close()
+                    return None
                 video.audio.write_audiofile(audio_path, verbose=False, logger=None)
                 video.close()
-                
+            
+            print(f"Audio extracted successfully to: {audio_path}")
             return audio_path
         except Exception as e:
             print(f"오디오 추출 실패: {e}")
+            import traceback
+            traceback.print_exc()
             return None
     
     def preprocess_audio(self, audio_segment, sr=16000):
@@ -133,7 +147,8 @@ class SpeakerDetector:
         """화자 구간 감지"""
         audio_path = self.extract_audio(video_path)
         if not audio_path:
-            return None
+            print(f"Failed to extract audio from {video_path}")
+            return []  # None 대신 빈 리스트 반환
         
         try:
             if self.pipeline and not use_simple:
@@ -164,9 +179,11 @@ class SpeakerDetector:
             
         except Exception as e:
             print(f"화자 감지 실패: {e}")
+            import traceback
+            traceback.print_exc()
             if os.path.exists(audio_path):
                 os.remove(audio_path)
-            return None
+            return []  # None 대신 빈 리스트 반환
     
     def extract_features(self, audio_segment, sr=16000):
         """오디오 세그먼트에서 특징 추출 - 향상된 버전"""
