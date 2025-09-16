@@ -224,25 +224,27 @@ if st.session_state.video_uploaded:
         if enable_speaker:
             with st.spinner("👥 화자 구분 중..."):
                 try:
-                    from modules.speaker_detector import RealSpeakerDetector
+                    from modules.speaker_detector import UnifiedSpeakerDetector
 
                     # Hugging Face 토큰 가져오기 (.env에서)
                     hf_token = os.getenv('HUGGINGFACE_TOKEN')
 
-                    detector = RealSpeakerDetector(
-                        max_speakers=max_speakers,
-                        huggingface_token=hf_token
+                    detector = UnifiedSpeakerDetector(
+                        max_speakers=max_speakers
                     )
 
                     # 실제 화자 감지 실행
-                    speaker_result = detector.detect_speakers(
-                        st.session_state.video_path,
-                        mode=speaker_mode.lower()
+                    speaker_result = detector.detect(
+                        st.session_state.video_path
                     )
 
-                    if speaker_result['success']:
-                        results['speaker_detection'] = speaker_result
-                        st.success(f"✅ 화자 감지 완료 ({speaker_result['method']})")
+                    if speaker_result and speaker_result.get('segments'):
+                        results['speaker_detection'] = {
+                            'success': True,
+                            'method': speaker_result.get('mode', 'UnifiedDetector'),
+                            'data': speaker_result
+                        }
+                        st.success(f"✅ 화자 감지 완료 ({speaker_result.get('mode', 'balanced')})")
                     else:
                         st.warning("⚠️ 화자 감지에서 문제가 발생했습니다.")
 
@@ -253,16 +255,20 @@ if st.session_state.video_uploaded:
         if enable_cut:
             with st.spinner("✂️ 스마트 컷 분석 중..."):
                 try:
-                    from modules.real_smart_cutter import RealSmartCutter
+                    from modules.smart_cutter import SmartCutter
 
-                    cutter = RealSmartCutter(mode=cut_mode.lower())
+                    cutter = SmartCutter(mode=cut_mode.lower())
 
                     # 실제 침묵 구간 분석
-                    cut_result = cutter.detect_silence(st.session_state.video_path)
+                    cut_result = cutter.process_video(st.session_state.video_path)
 
-                    if cut_result['success']:
-                        results['smart_cut'] = cut_result
-                        st.success(f"✅ 스마트 컷 분석 완료 ({cut_result['method']})")
+                    if cut_result:
+                        results['smart_cut'] = {
+                            'success': True,
+                            'method': cutter.mode,
+                            'data': cut_result
+                        }
+                        st.success(f"✅ 스마트 컷 분석 완료 ({cutter.mode})")
                     else:
                         st.warning("⚠️ 스마트 컷 분석에서 문제가 발생했습니다.")
 
@@ -352,25 +358,46 @@ if results:
             st.subheader("👥 화자 분석")
             speaker_data = results['speaker_detection']
 
-            st.write(f"**🎯 감지 방법:** {speaker_data['method']}")
-            st.write(f"**⏱️ 영상 길이:** {speaker_data['duration']:.1f}초")
-            st.write(f"**👥 화자 수:** {speaker_data['speaker_count']}명")
+            st.write(f"**🎯 감지 방법:** {speaker_data.get('method', 'Unknown')}")
+            # duration은 data 안에 있을 수 있음
+            if 'data' in speaker_data and speaker_data['data']:
+                data = speaker_data['data']
+                st.write(f"**👥 화자 수:** {data.get('speaker_count', len(data.get('stats', {})))}명")
+            else:
+                st.write(f"**👥 화자 수:** {len(speaker_data.get('stats', {}))}명")
 
             # 화자별 상세 정보
-            if speaker_data['stats']:
+            stats_data = None
+            if 'data' in speaker_data and speaker_data['data'] and 'stats' in speaker_data['data']:
+                stats_data = speaker_data['data']['stats']
+            elif 'stats' in speaker_data:
+                stats_data = speaker_data['stats']
+
+            if stats_data:
                 st.write("**화자별 분석:**")
-                for speaker_id, stats in speaker_data['stats'].items():
-                    duration_min = int(stats['total_duration'] // 60)
-                    duration_sec = int(stats['total_duration'] % 60)
-                    st.write(f"- **{speaker_id}**: {duration_min}분 {duration_sec}초 ({stats['percentage']:.1f}%)")
+                for speaker_id, stats in stats_data.items():
+                    if isinstance(stats, dict):
+                        duration = stats.get('total_duration', 0)
+                        duration_min = int(duration // 60)
+                        duration_sec = int(duration % 60)
+                        percentage = stats.get('percentage', 0)
+                        st.write(f"- **{speaker_id}**: {duration_min}분 {duration_sec}초 ({percentage:.1f}%)")
 
     with col2:
         # 스마트 컷 요약 (간단 버전)
         if results.get('smart_cut'):
             cut_data = results['smart_cut']
             st.write("**✂️ 스마트 컷 완료**")
-            st.caption(f"🎯 {cut_data['method']} 방법으로 분석됨")
-            st.caption(f"📉 {cut_data['reduction_rate']*100:.1f}% 단축 가능")
+
+            # method 가져오기
+            method = cut_data.get('method', 'Unknown')
+            st.caption(f"🎯 {method} 방법으로 분석됨")
+
+            # data 안에 실제 결과가 있을 수 있음
+            actual_data = cut_data.get('data', cut_data)
+            reduction_rate = actual_data.get('reduction_rate', 0)
+            if reduction_rate:
+                st.caption(f"📉 {reduction_rate*100:.1f}% 단축 가능")
 
             # 간투사 정보 표시
             if cut_data.get('filler_count'):
@@ -388,7 +415,11 @@ if results:
                     new_reduction = cut_data.get('new_reduction_rate', 0) * 100
                     st.info(f"💡 총 제거 가능: {removable_min}분 {removable_sec}초 (-{new_reduction:.1f}%)")
             else:
-                st.metric("침묵 개수", f"{cut_data['silence_count']}개")
+                # 실제 데이터 구조에 맞게 수정
+                actual_data = cut_data.get('data', cut_data)
+                silence_count = actual_data.get('silence_removed', 0)
+                if silence_count:
+                    st.metric("침묵 개수", f"{silence_count}개")
 
     # 처리 결과가 있을 때 추가 작업 섹션
     st.markdown("---")
@@ -407,18 +438,48 @@ if results:
                 # 기본: 스마트 컷 편집
                 with st.spinner("🎬 영상 편집 중... (시간이 걸릴 수 있습니다)"):
                     try:
-                        from modules.real_smart_cutter import RealSmartCutter
+                        from modules.smart_cutter import SmartCutter
                         import zipfile
                         import tempfile
 
                         # 항상 스마트 컷 영상 먼저 생성
-                        cutter = RealSmartCutter()
-                        cut_data = results['smart_cut']
+                        # VideoEditor를 사용해서 실제 편집 수행
+                        from video_editor import VideoEditor
+                        editor = VideoEditor()
+                        cut_data = results['smart_cut'].get('data', results['smart_cut'])
 
-                        edited_path = cutter.cut_video(
-                            st.session_state.video_path,
-                            cut_data.get('silence_segments', [])
-                        )
+                        # keep_segments를 사용해서 영상 편집
+                        keep_segments = cut_data.get('keep_segments', [])
+                        edited_path = None
+
+                        if keep_segments:
+                            try:
+                                # VideoEditor 로드
+                                editor.load_video(st.session_state.video_path)
+
+                                # 여러 구간을 하나로 연결
+                                import tempfile
+                                from moviepy.editor import VideoFileClip, concatenate_videoclips
+                                clips = []
+                                video = VideoFileClip(st.session_state.video_path)
+
+                                for seg in keep_segments:
+                                    start = seg['start']
+                                    end = seg['end']
+                                    clip = video.subclip(start, end)
+                                    clips.append(clip)
+
+                                if clips:
+                                    final_video = concatenate_videoclips(clips)
+                                    edited_path = os.path.join("processed", f"smart_cut_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp4")
+                                    os.makedirs("processed", exist_ok=True)
+                                    final_video.write_videofile(edited_path, codec='libx264', audio_codec='aac', logger=None)
+                                    final_video.close()
+
+                                video.close()
+                            except Exception as e:
+                                print(f"스마트 컷 편집 오류: {e}")
+                                edited_path = None
 
                         if not edited_path or not os.path.exists(edited_path):
                             st.error("❌ 스마트 컷 영상 편집 실패")
@@ -541,17 +602,30 @@ if results:
 
             if results.get('speaker_detection'):
                 data = results['speaker_detection']
+                actual_data = data.get('data', data)
                 report += "👥 화자 분석 결과\n"
-                report += f"- 감지 방법: {data['method']}\n"
-                report += f"- 영상 길이: {data['duration']:.1f}초\n"
-                report += f"- 화자 수: {data['speaker_count']}명\n\n"
+                report += f"- 감지 방법: {data.get('method', 'Unknown')}\n"
+                # duration은 smart_cut에서 가져오거나 계산
+                if results.get('smart_cut'):
+                    cut_data = results['smart_cut'].get('data', results['smart_cut'])
+                    duration = cut_data.get('original_duration', 0)
+                    if duration:
+                        report += f"- 영상 길이: {duration:.1f}초\n"
+                report += f"- 화자 수: {actual_data.get('speaker_count', len(actual_data.get('stats', {})))}명\n\n"
 
             if results.get('smart_cut'):
                 data = results['smart_cut']
+                actual_data = data.get('data', data)
                 report += "✂️ 스마트 컷 분석 결과\n"
-                report += f"- 원본 길이: {data['original_duration']:.1f}초\n"
-                report += f"- 침묵 구간: {data['silence_duration']:.1f}초\n"
-                report += f"- 단축률: {data['reduction_rate']*100:.1f}%\n"
+                original_duration = actual_data.get('original_duration', 0)
+                if original_duration:
+                    report += f"- 원본 길이: {original_duration:.1f}초\n"
+                silence_duration = actual_data.get('silence_duration', 0)
+                if silence_duration:
+                    report += f"- 침묵 구간: {silence_duration:.1f}초\n"
+                reduction_rate = actual_data.get('reduction_rate', 0)
+                if reduction_rate:
+                    report += f"- 단축률: {reduction_rate*100:.1f}%\n"
 
             st.download_button(
                 label="📥 리포트 다운로드",
@@ -711,7 +785,8 @@ if results:
 
             col1, col2, col3 = st.columns(3)
             with col1:
-                st.metric("🔇 침묵 구간", f"{cut_data.get('silence_count', 0)}개")
+                actual_data = cut_data.get('data', cut_data)
+                st.metric("🔇 침묵 구간", f"{actual_data.get('silence_removed', 0)}개")
             with col2:
                 silence_duration = cut_data.get('silence_duration', 0)
                 st.metric("⏰ 제거 가능 시간", f"{int(silence_duration//60)}:{int(silence_duration%60):02d}")

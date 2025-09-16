@@ -1,0 +1,56 @@
+# CutStudio v5.0 - Minimal Dependencies
+# Python 3.11+ required
+
+# Core Web Framework
+fastapi==0.104.1
+streamlit==1.29.0
+uvicorn==0.24.0
+
+# Video/Audio Processing
+ffmpeg-python==0.2.0
+librosa==0.10.1
+soundfile==0.12.1
+
+# AI/ML
+openai-whisper==20231117
+google-generativeai==0.3.0
+
+# Database
+sqlalchemy==2.0.23
+alembic==1.12.1
+
+# Utilities
+python-dotenv==1.0.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# Testing
+pytest==7.4.3
+pytest-cov==4.1.0
+pytest-asyncio==0.21.1
+pytest-watch==4.2.0
+
+# Development Tools
+black==23.11.0
+ruff==0.1.6
+mypy==1.7.0
+pre-commit==3.5.0
+
+# Documentation
+sphinx==7.2.6
+mkdocs==1.5.3
+mkdocs-material==9.4.0
+
+# Async Support
+aiofiles==23.2.1
+httpx==0.25.1
+
+# Monitoring
+loguru==0.7.2
+python-json-logger==2.0.7
+
+# Optional: Production
+# gunicorn==21.2.0
+# celery==5.3.4
+# redis==5.0.1
+# psycopg2-binary==2.9.9

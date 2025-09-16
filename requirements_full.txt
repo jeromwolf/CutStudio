@@ -1,0 +1,31 @@
+# CutStudio v5.0 - 전체 기능 버전
+# 모든 기능 포함 (정확도 최고)
+
+# === 필수 Core ===
+streamlit==1.29.0
+moviepy==1.0.3
+ffmpeg-python==0.2.0
+
+# === YouTube 다운로드 ===
+yt-dlp
+
+# === 오디오 분석 (스마트 컷) ===
+librosa==0.10.1
+scipy>=1.11.4
+numpy<2.0.0
+soundfile==0.12.1
+
+# === 화자 감지 (정확한 화자 구분) ===
+pyannote.audio==3.1.1
+torch>=2.0.0
+torchaudio>=2.0.0
+
+# === 음성 인식 (자막 생성 & 간투사 감지) ===
+openai-whisper==20231117
+
+# === AI 요약 (선택사항) ===
+google-generativeai==0.3.0
+
+# === 유틸리티 ===
+python-dotenv==1.0.0
+Pillow==10.3.0

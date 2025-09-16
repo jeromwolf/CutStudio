@@ -20,6 +20,7 @@ ffmpeg-python==0.2.0
 pydub==0.25.1
 librosa==0.10.2
 soundfile==0.12.1
+matplotlib==3.8.2
 
 # Data Processing
 pandas==2.2.0
@@ -34,6 +35,7 @@ python-dotenv==1.0.0
 tqdm>=4.66.0
 pillow>=10.0.0
 watchdog>=4.0.0  # Streamlit 성능 향상
+opencv-python-headless==4.10.0.84  # 비디오 프레임 처리 (Docker용)
 
 # =================================
 # AI 기능 (권장 - 없어도 기본 작동)
@@ -41,6 +43,9 @@ watchdog>=4.0.0  # Streamlit 성능 향상
 
 # Speech Recognition & Transcription
 openai-whisper==20250625
+SpeechRecognition==3.10.4
+scikit-learn==1.3.2
+torchaudio
 
 # Google AI (for summarization)
 google-generativeai==0.8.3

@@ -1,0 +1,19 @@
+# CutStudio v5.0 - 최소 설치 버전
+# 핵심 기능만 포함 (빠른 설치)
+
+# 필수 Core
+streamlit==1.29.0
+moviepy==1.0.3
+ffmpeg-python==0.2.0
+
+# YouTube 다운로드
+yt-dlp
+
+# 오디오 분석 (스마트 컷)
+librosa==0.10.1
+scipy>=1.11.4
+numpy<2.0.0
+soundfile==0.12.1
+
+# 유틸리티
+python-dotenv==1.0.0
